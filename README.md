@@ -17,7 +17,7 @@ Yes
 
 no, not really
 
-## Languge i plan on using is zig
+## Language i plan on using is zig
 
 cause i fucking feel like it rn 
 
@@ -37,3 +37,25 @@ glyph --help
 - [ ] Parser 
 - [ ] Render
 
+## GOALS:
+
+currently i would like to tokenize and parse into a dom the following 
+
+``` HTML
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Mr Beans Poopy site</title>
+    </head>
+    <body>
+        <h1>
+            IM A MOTHERFUCKING WEBSITE
+        </h1>
+        <h2>
+            WHAT DO YOU MEAN HTMLS NOT A PROGRAMING LANGUAGE
+        </h2>
+    </body>
+</html>
+
+
+```
