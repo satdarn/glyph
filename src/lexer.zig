@@ -73,7 +73,7 @@ const LexerStates = enum {
     CDATAsection,
     CDATAsectionbracket,
     CDATAsectionend,
-    Characterreference,
+    CharacterReference,
     Namedcharacterreference,
     Ambiguousampersand,
     Numericcharacterreference,
@@ -87,15 +87,32 @@ const LexerStates = enum {
 const HtmlLexer = struct {
     stream: InputStream,
     allocator: std.mem.Allocator,
-    state: LexerStates = .Data,
+    current_state: LexerStates = .Data,
+    return_state: LexerStates = .Data,
 
     fn init(allocator: std.mem.Allocator, input_stream: InputStream) HtmlLexer {
         return .{ .stream = input_stream, .allocator = allocator };
     }
 
     fn run(lexer: *HtmlLexer) void {
-        sw: switch (lexer.state) {
-            .Data => {},
+        var current_input_character: ?u8 = undefined;
+        sw: switch (lexer.current_state) {
+
+            .Data => {
+                current_input_character = lexer.state.consumeChar();
+                if (current_input_character) |char| {
+                    if (char == '&') {
+                        lexer.return_state = .Data;
+                        continue :sw .CharacterReference;
+                    }
+                    if (char == '<') {
+                        continue :sw .Tagopen;
+                    }
+                } else {
+                    // TODO: Emit EOF token 
+                }
+
+            },
             .RCDATA => {},
             .RAWTEXT => {},
             .Scriptdata => {},
@@ -166,7 +183,9 @@ const HtmlLexer = struct {
             .CDATAsection => {},
             .CDATAsectionbracket => {},
             .CDATAsectionend => {},
-            .Characterreference => {},
+            .CharacterReference => {
+                unreachable; 
+            },
             .Namedcharacterreference => {},
             .Ambiguousampersand => {},
             .Numericcharacterreference => {},

@@ -3,9 +3,13 @@ const std = @import("std");
 // TODO: THIS NEEDS TO HANDLE UNICODE TO BE IN SPEC ascii is ok for now
 const InputStream = struct {
     data: []const u8,
-    pos: usize,
+    pos: usize = 0,
 
-    fn getNextChar(stream: *InputStream) ?u8 {
+    fn init(data: []const u8) InputStream{
+        return .{.data = data};
+    }
+
+    fn consumeChar(stream: *InputStream) ?u8 {
         if(stream.pos+1 >= stream.data.size){ return null;}
         stream.pos += 1;
         return stream.data[stream.pos];
