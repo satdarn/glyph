@@ -8,7 +8,7 @@ const LexerStates = enum {
     Scriptdata,
     PLAINTEXT,
     Tagopen,
-    Endtagopen,
+    EndTagOpen,
     Tagname,
     RCDATAlessthansign,
     RCDATAendtagopen,
@@ -43,7 +43,7 @@ const LexerStates = enum {
     Afterattributevaluequoted,
     Selfclosingstarttag,
     Boguscomment,
-    Markupdeclarationopen,
+    MarkupDeclarationOpen,
     Commentstart,
     Commentstartdash,
     Comment,
@@ -84,22 +84,22 @@ const LexerStates = enum {
     Numericcharacterreferenceend,
 };
 
-const HtmlLexer = struct {
+pub const HtmlLexer = struct {
     stream: InputStream,
     allocator: std.mem.Allocator,
     current_state: LexerStates = .Data,
     return_state: LexerStates = .Data,
 
-    fn init(allocator: std.mem.Allocator, input_stream: InputStream) HtmlLexer {
+    pub fn init(allocator: std.mem.Allocator, input_stream: InputStream) HtmlLexer {
         return .{ .stream = input_stream, .allocator = allocator };
     }
 
-    fn run(lexer: *HtmlLexer) void {
+    pub fn run(lexer: *HtmlLexer) void {
         var current_input_character: ?u8 = undefined;
         sw: switch (lexer.current_state) {
 
             .Data => {
-                current_input_character = lexer.state.consumeChar();
+                current_input_character = lexer.stream.consumeChar();
                 if (current_input_character) |char| {
                     if (char == '&') {
                         lexer.return_state = .Data;
@@ -117,8 +117,16 @@ const HtmlLexer = struct {
             .RAWTEXT => {},
             .Scriptdata => {},
             .PLAINTEXT => {},
-            .Tagopen => {},
-            .Endtagopen => {},
+            .Tagopen => {
+                current_input_character = lexer.stream.consumeChar();
+                if(current_input_character) |char| {
+                    if (current_input_character == '!') { continue sw: .MarkupDeclarationOpen; }
+                    if (current_input_character == '/') { continue sw: .EndTagOpen; }
+                } else {     
+                    // EOF
+                }
+            },
+            .EndTagOpen => {},
             .Tagname => {},
             .RCDATAlessthansign => {},
             .RCDATAendtagopen => {},
@@ -153,7 +161,11 @@ const HtmlLexer = struct {
             .Afterattributevaluequoted => {},
             .Selfclosingstarttag => {},
             .Boguscomment => {},
-            .Markupdeclarationopen => {},
+            .MarkupDeclarationOpen => {
+                if(lexer.stream.consumeString("DOCTYPE")) {
+                    continue :sw .DOCTYPE;
+                }
+            },
             .Commentstart => {},
             .Commentstartdash => {},
             .Comment => {},
