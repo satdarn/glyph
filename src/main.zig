@@ -1,6 +1,11 @@
 const std = @import("std");
+const HtmlLexer = @import("lexer.zig").HtmlLexer;
+const InputStream = @import("inputStream.zig").InputStream;
 pub fn main() !void {
-    // Prints to stderr, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    // just playing arround with fucntionality, real test will be writen later
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+    const stream = InputStream.init("<!DOCTYPE html> \n <html> \n </html> \n");
+    _ = HtmlLexer.init(allocator, stream);
 }
-
