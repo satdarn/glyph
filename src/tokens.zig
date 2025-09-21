@@ -10,12 +10,12 @@ pub const Token = union(enum) {
     StartTag: struct {
         tagName: []const u8,
         selfClosing: bool,
-        attributes: std.ArrayList(Attributes),
+        attributes: []Attributes,
     },
     EndTag: struct {
         tagName: []const u8,
         selfClosing: bool,
-        attributes: std.ArrayList(Attributes),
+        attributes: []Attributes,
     },
     Comment: struct {
         data: []const u8,
@@ -23,53 +23,64 @@ pub const Token = union(enum) {
     Character: struct {
         data: []const u8,
     },
-    EndOfFile,
+    EndOfFile: void,
 
     pub fn createDOCTYPEToken(name: []const u8, publicIdent: []const u8, systemIdent: []const u8, forceQuirks: bool) Token {
         return .{ .DOCTYPE = .{ .name = name, .publicIdent = publicIdent, .systemIdent = systemIdent, .forceQuirks = forceQuirks } };
     }
-    pub fn createStartTag(tagName: []const u8, selfClosing: bool, attributes: std.ArrayList(Attributes)) Token {
-        return .{ .StartTag = .{ .tagName = tagName, .selfClosing = selfClosing, .attributes = attributes } };
+    pub fn createStartTag(tagName: u8, selfClosing: bool) Token {
+        return .{ .StartTag = .{
+            .tagName = &[_]u8{tagName},
+            .selfClosing = selfClosing,
+            .attributes = &[_]Attributes{},
+        } };
     }
-    pub fn createEndTag(tagName: []const u8, selfClosing: bool, attributes: std.ArrayList(Attributes)) Token {
-        return .{ .EndTag = .{ .tagName = tagName, .selfClosing = selfClosing, .attributes = attributes } };
+    pub fn createEndTag(tagName: u8, selfClosing: bool) Token {
+        return .{ .EndTag = .{
+            .tagName = &[_]u8{tagName},
+            .selfClosing = selfClosing,
+            .attributes = &[_]Attributes{},
+        } };
     }
-    pub fn createComment(data: []const u8) Token {
-        return .{ .Comment = .{ .data = data } };
+    pub fn createComment(data: u8) Token {
+        return .{ .Comment = .{ .data = &[_]u8{data} } };
     }
-    pub fn createCharacter(data: []const u8) Token {
-        return .{ .Character = .{ .data = data } };
+    pub fn createCharacter(data: u8) Token {
+        return .{ .Character = .{ .data = &[_]u8{data} } };
+    }
+    pub fn createEOF() Token {
+        return .{.EndOfFile = {}};
     }
     pub fn emitToken(token: Token) void {
         switch (token) {
             .DOCTYPE => |tok| {
-                std.debug.print("DOCTYPE TKN", .{});
-                std.debug.print("   name:{s}", .{tok.name});
-                std.debug.print("   publicIdent : {s}", .{tok.publicIdent});
-                std.debug.print("   systemIdent : {s}", .{tok.systemIdent});
-                std.debug.print("   forceQuirks : {b}", .{tok.forceQuirks});
+                std.debug.print("DOCTYPE TKN\n", .{});
+                std.debug.print("   name:{s}\n", .{tok.name});
+                std.debug.print("   publicIdent : {s}\n", .{tok.publicIdent});
+                std.debug.print("   systemIdent : {s}\n", .{tok.systemIdent});
+                std.debug.print("   forceQuirks : {b}\n", .{tok.forceQuirks});
             },
             .StartTag => |tok| {
-                std.debug.print("StartTag TKN", .{});
-                std.debug.print("   tagName : {s}", .{tok.tagName});
-                std.debug.print("   selfClosing : {b}", .{tok.selfClosing});
-                std.debug.print("   selfClosing : {b}", .{tok.selfClosing});
-
+                std.debug.print("StartTag TKN\n", .{});
+                std.debug.print("   tagName : {s}\n", .{tok.tagName});
+                std.debug.print("   selfClosing : {b}\n", .{tok.selfClosing});
+                std.debug.print("   selfClosing : {b}\n", .{tok.selfClosing});
             },
             .EndTag => |tok| {
-                std.debug.print("EndTag TKN", .{});
-                std.debug.print("   tagName : {s}", .{tok.tagName});
-                std.debug.print("   selfClosing : {b}", .{tok.selfClosing});
-                std.debug.print("   selfClosing : {b}", .{tok.selfClosing});
+                std.debug.print("EndTag TKN\n", .{});
+                std.debug.print("   tagName : {s}\n", .{tok.tagName});
+                std.debug.print("   selfClosing : {b}\n", .{tok.selfClosing});
+                std.debug.print("   selfClosing : {b}\n", .{tok.selfClosing});
             },
             .Comment => |tok| {
-                std.debug.print("Comment TKN", .{});
-                std.debug.print("   data: {s}", .{tok.data});
+                std.debug.print("Comment TKN\n", .{});
+                std.debug.print("   data: {s}\n", .{tok.data});
             },
-            .Comment => |tok| {
-                std.debug.print("Comment TKN", .{});
-                std.debug.print("   data: {s}", .{tok.data});
+            .Character => |tok| {
+                std.debug.print("Character TKN\n", .{});
+                std.debug.print("   data: {s}\n", .{tok.data});
             },
+            .EndOfFile => std.debug.print("EOF TKN\n", .{})
         }
     }
 };
