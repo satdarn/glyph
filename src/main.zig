@@ -7,5 +7,6 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
     const stream = InputStream.init("<!DOCTYPE html> \n <html> \n </html> \n");
-    _ = HtmlLexer.init(allocator, stream);
+    var lexer = HtmlLexer.init(allocator, stream);
+    lexer.run();
 }
