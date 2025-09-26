@@ -8,5 +8,5 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     const stream = InputStream.init("<!DOCTYPE html> \n <html> \n </html> \n");
     var lexer = HtmlLexer.init(allocator, stream);
-    lexer.run();
+    try lexer.run();
 }
