@@ -13,8 +13,9 @@ pub const InputStream = struct {
         if (stream.pos + 1 >= stream.data.len) {
             return null;
         }
+        const char_ret = stream.data[stream.pos];
         stream.pos += 1;
-        return stream.data[stream.pos];
+        return char_ret; 
     }
 
     pub fn reconsumeChar(stream: *InputStream) void {
