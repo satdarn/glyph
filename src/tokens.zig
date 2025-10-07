@@ -58,27 +58,28 @@ pub const Token = union(enum) {
 pub const TokenHandler = struct {
     allocator: std.mem.Allocator,
     tokenRefList: std.ArrayList(*Token),
-    emitList: std.ArrayList(*Token),
     pub fn init(allocator: std.mem.Allocator) !TokenHandler {
         // #TODO: optimize the size of the "Token List" that best represents the how we should keep on hand,
         // maybe move emit to this struct and we can dealloc from emit ???
         const tokenRefList = try std.ArrayList(*Token).initCapacity(allocator, 30);
-        const emitList = try std.ArrayList(*Token).initCapacity(allocator, 30);
-        return .{ .allocator = allocator, .tokenRefList = tokenRefList, .emitList = emitList };
+        return .{
+            .allocator = allocator,
+            .tokenRefList = tokenRefList,
+        };
     }
     pub fn deinit(self: *TokenHandler) void {
         for (self.tokenRefList.items) |tok| {
             if (tok.* == .Tag) {
                 tok.Tag.tagName.deinit(self.allocator);
             }
-            if (tok.* == .DOCTYPE) {}
+            if (tok.* == .DOCTYPE) {
+                tok.DOCTYPE.name.deinit(self.allocator);
+                tok.DOCTYPE.publicIdent.deinit(self.allocator);
+                tok.DOCTYPE.systemIdent.deinit(self.allocator);
+            }
             self.allocator.destroy(tok);
         }
         self.tokenRefList.deinit(self.allocator);
-    }
-    pub fn emit(self: *TokenHandler, tok: *Token) !void {
-        Token.emitToken(tok);
-        self.emitList.append(self.allocator, tok);
     }
     pub fn createDOCTYPEToken(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
