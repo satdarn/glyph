@@ -29,7 +29,7 @@ const LexerStates = enum {
     ScriptDataEscapedLessThanSign,
     ScriptDataEscapedEndTagOpen,
     ScriptDataEscapedEndTagName,
-    ScriptDataDoubleEscapestart,
+    ScriptDataDoubleEscapeStart,
     ScriptDataDoubleEscaped,
     ScriptDataDoubleEscapedDash,
     ScriptDataDoubleEscapedDashDash,
@@ -101,7 +101,9 @@ pub const HtmlLexer = struct {
         var current_input_character: ?u8 = undefined;
         var tokenHandler = try TokenHandler.init(lexer.allocator);
         defer tokenHandler.deinit();
-        var tempBuffer: [1024:0]u8 = undefined;
+        var tempBuffer: std.ArrayList(u8) = try std.ArrayList(u8).initCapacity(lexer.allocator, 10);
+        defer tempBuffer.deinit(lexer.allocator);
+
         sw: switch (lexer.current_state) {
             .Data => {
                 current_input_character = lexer.stream.consumeChar();
@@ -123,6 +125,7 @@ pub const HtmlLexer = struct {
                         continue :sw .Data;
                     }
                     // Anything else
+
                     current_token = try tokenHandler.createCharacter(char);
                     Token.emitToken(current_token);
                     continue :sw .Data;
@@ -148,6 +151,7 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error.
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
                     }
                     // Anything else
                     current_token = try tokenHandler.createCharacter(char);
@@ -170,6 +174,7 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error.
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
                     }
                     // Anything else
                     current_token = try tokenHandler.createCharacter(char);
@@ -192,6 +197,7 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error.
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
                     }
                     // Anything else
                     current_token = try tokenHandler.createCharacter(char);
@@ -210,6 +216,7 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
                     }
                     // Anything else
                     current_token = try tokenHandler.createCharacter(char);
@@ -309,8 +316,7 @@ pub const HtmlLexer = struct {
                     }
                     // U+0000 NULL
                     if (char == 0) {
-                        // unexpected-null-character parse error.
-                        // Append a U+FFFD REPLACEMENT CHARACTER character to the current tag token's tag name
+                        continue :sw .TagName;
                     } else {
                         // Anything else
                         try current_token.Tag.tagName.append(tokenHandler.allocator, char);
@@ -326,7 +332,7 @@ pub const HtmlLexer = struct {
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer[0] = 0;
+                        tempBuffer.clearAndFree(lexer.allocator);
                         continue :sw .RCADATAEndTagopen;
                     } else {
                         // Anything else
@@ -414,7 +420,7 @@ pub const HtmlLexer = struct {
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer[0] = 0;
+                        tempBuffer.clearAndFree(lexer.allocator);
                         continue :sw .RAWTEXTEndTagOpen;
                     }
                     // Anything else
@@ -497,7 +503,7 @@ pub const HtmlLexer = struct {
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer[0] = 0;
+                        tempBuffer.clearAndFree(lexer.allocator);
                         continue :sw .ScriptDataEndTagOpen;
                     }
                     // U+0021 EXCLAMATION MARK (!)
@@ -643,6 +649,7 @@ pub const HtmlLexer = struct {
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error. Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
                     }
                     // Anything else
                     else {
@@ -670,6 +677,8 @@ pub const HtmlLexer = struct {
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error. Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
+                        continue :sw .ScriptDataEscapedDash;
                     }
                     // Anything else
                     else {
@@ -684,43 +693,309 @@ pub const HtmlLexer = struct {
             },
             .ScriptDataEscapedDashDash => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+002D HYPHEN-MINUS (-)
+                    if (char == '-') {
+                        Token.emitToken(try tokenHandler.createCharacter('-'));
+                        continue :sw .ScriptDataEscapedDashDash;
+                    }
+                    // U+003C LESS-THAN SIGN (<)
+                    if (char == '<') {
+                        continue :sw .ScriptDataEscapedLessThanSign;
+                    }
+                    // U+003E GREATER-THAN SIGN (>)
+                    if (char == '>') {
+                        Token.emitToken(try tokenHandler.createCharacter('>'));
+                        continue :sw .ScriptData;
+                    }
+                    // U+0000 NULL
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        // Emit a U+FFFD REPLACEMENT CHARACTER character token.
+                        Token.emitToken(try tokenHandler.createReplacement());
+                        Token.emitToken(try tokenHandler.createReplacement());
+                        continue :sw .ScriptDataEscaped;
+                    }
+                    // Anything else
+                    else {
+                        Token.emitToken(try tokenHandler.createCharacter(char));
+                        continue :sw .ScriptDataEscaped;
+                    }
+                }
+                // EOF
+                else {
+                    // eof-in-script-html-comment-like-text parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .ScriptDataEscapedLessThanSign => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+002F SOLIDUS (/)
+                    if (char == '/') {
+                        tempBuffer.clearAndFree(lexer.allocator);
+                        continue :sw .ScriptDataEscapedEndTagOpen;
+                    }
+                    // ASCII alpha
+                    if (std.ascii.isAlphabetic(char)) {
+                        tempBuffer.clearAndFree(lexer.allocator);
+                        Token.emitToken(try tokenHandler.createCharacter('<'));
+                        lexer.stream.reconsumeChar();
+                        continue :sw .ScriptDataDoubleEscapeStart;
+                    }
+                    // Anything else
+                    else {
+                        Token.emitToken(try tokenHandler.createCharacter('<'));
+                        continue :sw .ScriptDataEscaped;
+                    }
+                }
+                // EOF is Anything else
+                else {
+                    Token.emitToken(try tokenHandler.createCharacter('<'));
+                    continue :sw .ScriptDataEscaped;
+                }
             },
             .ScriptDataEscapedEndTagOpen => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isAlphabetic(char)) {
+                        current_token = try tokenHandler.createEndTag();
+                        try current_token.Tag.tagName.append(tokenHandler.allocator, char);
+                        continue :sw .ScriptDataEscapedEndTagName;
+                    }
+                    // Anything else
+                    else {
+                        Token.emitToken(try tokenHandler.createComment('<'));
+                        Token.emitToken(try tokenHandler.createComment('/'));
+                        continue :sw .ScriptDataEscaped;
+                    }
+                }
+                // EOF is Anything else
+                else {
+                    Token.emitToken(try tokenHandler.createComment('<'));
+                    Token.emitToken(try tokenHandler.createComment('/'));
+                    continue :sw .ScriptDataEscaped;
+                }
             },
             .ScriptDataEscapedEndTagName => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
+                    if (std.ascii.isWhitespace(char)) {
+                        // If the current end tag token is an appropriate end tag token,
+                        // then switch to the before attribute name state.
+                        // Otherwise, treat it as per the "anything else" entry below.
+                    }
+                    // U+002F SOLIDUS (/)
+                    if (char == '/') {
+                        // If the current end tag token is an appropriate end tag token,
+                        // then switch to the self-closing start tag state.
+                        // Otherwise, treat it as per the "anything else" entry below.
+                    }
+                    // U+003E GREATER-THAN SIGN (>)
+                    if (char == '>') {
+                        // If the current end tag token is an appropriate end tag token,
+                        // then switch to the data state and emit the current tag token.
+                        // Otherwise, treat it as per the "anything else" entry below.
+                    }
+                    // ASCII upper alpha
+                    if (std.ascii.isAlphabetic(char)) {
+                        // ASCII upper alpha
+                        if (std.ascii.isUpper(char)) {
+                            // Append the lowercase version of the current input character
+                            // (add 0x0020 to the character's code point) to the current tag token's tag name.
+                            // Append the current input character to the temporary buffer.
+                        }
+                        // ASCII lower alpha
+                        else if (std.ascii.isLower(char)) {
+                            // Append the current input character to the current tag token's tag name.
+                            // Append the current input character to the temporary buffer.
+                        }
+                    }
+                    //Anything else
+                    else {
+                        // Emit a U+003C LESS-THAN SIGN character token, a U+002F SOLIDUS character token,
+                        // and a character token for each of the characters in the temporary buffer
+                        // (in the order they were added to the buffer). Reconsume in the script data escaped state.
+                    }
+                }
+                // EOF is Anything else
+                else {
+                    // Emit a U+003C LESS-THAN SIGN character token, a U+002F SOLIDUS character token,
+                    // and a character token for each of the characters in the temporary buffer
+                    // (in the order they were added to the buffer). Reconsume in the script data escaped state.
+
+                }
             },
-            .ScriptDataDoubleEscapestart => {
+            .ScriptDataDoubleEscapeStart => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char) or char == '/' or char == '>') {
+                        // If the temporary buffer is the string "script",
+                        // then switch to the script data double escaped state.
+                        if (std.mem.eql(u8, tempBuffer.items, "script")) {
+                            continue :sw .ScriptDataDoubleEscaped;
+                        }
+                        // Otherwise, switch to the script data escaped state.
+                        // Emit the current input character as a character token.
+                        Token.emitToken(try tokenHandler.createCharacter(char));
+                        continue :sw .ScriptDataEscaped;
+                    }
+                } else {}
             },
             .ScriptDataDoubleEscaped => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+002D HYPHEN-MINUS (-)
+                    if (char == '-') {
+                        Token.emitToken(try tokenHandler.createCharacter('-'));
+                        continue :sw .ScriptDataDoubleEscapedDash;
+                    }
+                    // U+003C LESS-THAN SIGN (<)
+                    if (char == '<') {
+                        Token.emitToken(try tokenHandler.createCharacter('<'));
+                        continue :sw .ScriptDataDoubleEscapedLessThanSign;
+                    }
+                    // U+0000 NULL
+                    if (char == 0) {
+                        // This is an unexpected-null-character parse error.
+                        Token.emitToken(try tokenHandler.createReplacement());
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                    // Anything else
+                    else {
+                        Token.emitToken(try tokenHandler.createCharacter(char));
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                }
+                // EOF
+                else {
+                    // This is an eof-in-script-html-comment-like-text parse error.
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .ScriptDataDoubleEscapedDash => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+002D HYPHEN-MINUS (-)
+                    if (char == '-') {
+                        Token.emitToken(try tokenHandler.createCharacter('-'));
+                        continue :sw .ScriptDataDoubleEscapedDashDash;
+                    }
+                    // U+003C LESS-THAN SIGN (<)
+                    if (char == '<') {
+                        Token.emitToken(try tokenHandler.createCharacter('<'));
+                        continue :sw .ScriptDataDoubleEscapedLessThanSign;
+                    }
+                    // U+0000 NULL
+                    if (char == 0) {
+                        // This is an unexpected-null-character parse error.
+                        Token.emitToken(try tokenHandler.createReplacement());
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                    // Anything else
+                    else {
+                        Token.emitToken(try tokenHandler.createCharacter(char));
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                }
+                // EOF
+                else {
+                    // This is an eof-in-script-html-comment-like-text parse error.
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .ScriptDataDoubleEscapedDashDash => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+002D HYPHEN-MINUS (-)
+                    if (char == '-') {
+                        Token.emitToken(try tokenHandler.createCharacter('-'));
+                        continue :sw .ScriptDataDoubleEscapedDashDash;
+                    }
+                    // U+003C LESS-THAN SIGN (<)
+                    if (char == '<') {
+                        Token.emitToken(try tokenHandler.createCharacter('<'));
+                        continue :sw .ScriptDataDoubleEscapedLessThanSign;
+                    }
+                    // U+003E GREATER-THAN SIGN (>)
+                    // Switch to the script data state. Emit a U+003E GREATER-THAN SIGN character token.
+                    if (char == '>') {
+                        Token.emitToken(try tokenHandler.createCharacter('>'));
+                        continue :sw .ScriptData;
+                    }
+                    // U+0000 NULL
+                    if (char == 0) {
+                        // This is an unexpected-null-character parse error.
+                        Token.emitToken(try tokenHandler.createReplacement());
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                    // Anything else
+                    else {
+                        Token.emitToken(try tokenHandler.createCharacter(char));
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                }
+                // EOF
+                else {
+                    // This is an eof-in-script-html-comment-like-text parse error.
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .ScriptDataDoubleEscapedLessThanSign => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    // U+002F SOLIDUS (/)
+                    if (char == '/') {
+                        tempBuffer.clearAndFree(lexer.allocator);
+                        Token.emitToken(try tokenHandler.createCharacter('/'));
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                    // Anything else
+                    else {
+                        lexer.stream.reconsumeChar();
+                        continue :sw .ScriptDataDoubleEscaped;
+                    }
+                }
+                // EOF is Anything else
+                else {
+                    lexer.stream.reconsumeChar();
+                    continue :sw .ScriptDataDoubleEscaped;
+                }
             },
             .ScriptDataDoubleEscapeEnd => {
                 current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char) or char == '/' or char == '>') {
+                        if (std.mem.eql(u8, tempBuffer.items, "script")) {
+                            continue :sw .ScriptDataEscaped;
+                        } else {
+                            Token.emitToken(try tokenHandler.createCharacter(char));
+                            continue :sw .ScriptDataDoubleEscaped;
+                        }
+                    }
+                    if (std.ascii.isAlphabetic(char)) {
+                        // ASCII upper alpha
+                        if (std.ascii.isUpper(char)) {
+                            Token.emitToken(try tokenHandler.createCharacter(std.ascii.toLower(char)));
+                            continue :sw .ScriptDataDoubleEscaped;
+                        }
+                        // ASCII lower alpha
+                        if (std.ascii.isLower(char)) {
+                            // Append the current input character to the temporary buffer. Emit the current input character as a character token.
+                            Token.emitToken(try tokenHandler.createCharacter(char));
+                        }
+                        // Anything else
+                        else {
+                            lexer.stream.reconsumeChar();
+                            continue :sw .ScriptDataDoubleEscaped;
+                        }
+                    }
+                } else {}
             },
             .BeforeAttributeName => {
                 current_input_character = lexer.stream.consumeChar();
@@ -867,6 +1142,22 @@ pub const HtmlLexer = struct {
             .DOCTYPEName => {
                 current_input_character = lexer.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
+//                 U+0009 CHARACTER TABULATION (tab)
+// U+000A LINE FEED (LF)
+// U+000C FORM FEED (FF)
+// U+0020 SPACE
+// Switch to the after DOCTYPE name state.
+// U+003E GREATER-THAN SIGN (>)
+// Switch to the data state. Emit the current DOCTYPE token.
+// ASCII upper alpha
+// Append the lowercase version of the current input character (add 0x0020 to the character's code point) to the current DOCTYPE token's name.
+// U+0000 NULL
+// This is an unexpected-null-character parse error. Append a U+FFFD REPLACEMENT CHARACTER character to the current DOCTYPE token's name.
+// EOF
+// This is an eof-in-doctype parse error. Set the current DOCTYPE token's force-quirks flag to on. Emit the current DOCTYPE token. Emit an end-of-file token.
+// Anything else
+// Append the current input character to the current DOCTYPE token's name.
+// 
             },
             .AfterDOCTYPEName => {
                 current_input_character = lexer.stream.consumeChar();
