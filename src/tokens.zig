@@ -19,6 +19,7 @@ pub const Token = union(enum) {
     Character: struct {
         data: []const u8,
     },
+    ReplacementCharacter : void, // REPLACEMENT CHARACTER character token U+FFFD
     EndOfFile: void,
     pub fn emitToken(token: *Token) void {
         switch (token.*) {
@@ -50,6 +51,7 @@ pub const Token = union(enum) {
                 std.debug.print("Character TKN\n", .{});
                 std.debug.print("   data: {s}\n", .{tok.data});
             },
+            .ReplacementCharacter => std.debug.print("EOF TKN\n", .{}),
             .EndOfFile => std.debug.print("EOF TKN\n", .{}),
         }
     }
@@ -126,6 +128,12 @@ pub const TokenHandler = struct {
     pub fn createCharacter(self: *TokenHandler, data: u8) !*Token {
         const tok: *Token = try self.allocator.create(Token);
         tok.* = .{ .Character = .{ .data = &[1]u8{data} } };
+        try self.tokenRefList.append(self.allocator, tok);
+        return tok;
+    }
+    pub fn createReplacement(self: *TokenHandler) !*Token {
+        const tok: *Token = try self.allocator.create(Token);
+        tok.* = .{ .ReplacementCharacter = {} };
         try self.tokenRefList.append(self.allocator, tok);
         return tok;
     }
