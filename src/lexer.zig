@@ -37,12 +37,12 @@ const LexerStates = enum {
     ScriptDataDoubleEscapeEnd,
     BeforeAttributeName,
     AttributeName,
-    AfterattributeName,
-    Beforeattributevalue,
-    Attributevaluedoublequoted,
-    Attributevaluesinglequoted,
-    Attributevalueunquoted,
-    Afterattributevaluequoted,
+    AfterAttributeName,
+    BeforeAttributeValue,
+    AttributeValueDoubleQuoted,
+    AttributeValueSingleQuoted,
+    AttributeValueUnquoted,
+    AfterAttributeValueQuoted,
     SelfClosingStartTag,
     BogusComment,
     MarkupDeclarationOpen,
@@ -96,21 +96,21 @@ pub const HtmlLexer = struct {
         return .{ .stream = input_stream, .allocator = allocator };
     }
 
-    pub fn run(lexer: *HtmlLexer) !void {
+    pub fn run(self: *HtmlLexer) !void {
         var current_token: *Token = undefined;
         var current_input_character: ?u8 = undefined;
-        var tokenHandler = try TokenHandler.init(lexer.allocator);
+        var tokenHandler = try TokenHandler.init(self.allocator);
         defer tokenHandler.deinit();
-        var tempBuffer: std.ArrayList(u8) = try std.ArrayList(u8).initCapacity(lexer.allocator, 10);
-        defer tempBuffer.deinit(lexer.allocator);
+        var tempBuffer: std.ArrayList(u8) = try std.ArrayList(u8).initCapacity(self.allocator, 10);
+        defer tempBuffer.deinit(self.allocator);
 
-        sw: switch (lexer.current_state) {
+        sw: switch (self.current_state) {
             .Data => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0026 AMPERSAND (&)
                     if (char == '&') {
-                        lexer.return_state = .Data;
+                        self.return_state = .Data;
                         continue :sw .CharacterReference;
                     }
                     // U+003C LESS-THAN SIGN (<)
@@ -136,11 +136,11 @@ pub const HtmlLexer = struct {
                 }
             },
             .RCDATA => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0026 AMPERSAND (&)
                     if (char == '&') {
-                        lexer.return_state = .RCDATA;
+                        self.return_state = .RCDATA;
                         continue :sw .CharacterReference;
                     }
                     // U+003C LESS-THAN SIGN (<)
@@ -164,7 +164,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .RAWTEXT => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+003C LESS-THAN SIGN (<)
                     if (char == '<') {
@@ -187,7 +187,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptData => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+003C LESS-THAN SIGN (<)
                     if (char == '<') {
@@ -210,7 +210,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .PLAINTEXT => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0000 NULL
                     if (char == 0) {
@@ -230,7 +230,7 @@ pub const HtmlLexer = struct {
             },
 
             .Tagopen => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0021 EXCLAMATION MARK (!)
                     if (char == '!') {
@@ -250,13 +250,13 @@ pub const HtmlLexer = struct {
                     if (char == '?') {
                         // unexpected-question-mark-instead-of-tag-name parse error
                         current_token = try tokenHandler.createComment(0);
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .BogusComment;
                     }
                     // Anything else
                     // invalid-first-character-of-tag-name parse error
                     Token.emitToken(try tokenHandler.createCharacter('<'));
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .Data;
                 } else {
                     // EOF
@@ -267,7 +267,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .EndTagOpen => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
@@ -283,7 +283,7 @@ pub const HtmlLexer = struct {
                         // Anything else
                         // invalid-first-character-of-tag-name parse error
                         current_token = try tokenHandler.createComment(0);
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .BogusComment;
                     }
                 } else {
@@ -294,7 +294,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .TagName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
                     if (std.ascii.isWhitespace(char)) {
@@ -328,50 +328,50 @@ pub const HtmlLexer = struct {
                 }
             },
             .RCDATALessThanSign => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer.clearAndFree(lexer.allocator);
+                        tempBuffer.clearAndFree(self.allocator);
                         continue :sw .RCADATAEndTagopen;
                     } else {
                         // Anything else
                         Token.emitToken(try tokenHandler.createCharacter('>'));
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .RCDATA;
                     }
                 } else {
                     // EOF is Anything else
                     Token.emitToken(try tokenHandler.createCharacter('>'));
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .RCDATA;
                 }
             },
             .RCADATAEndTagopen => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
                         current_token = try tokenHandler.createEndTag();
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .RCADATAEndTagName;
                     } else {
                         // Anything else
                         Token.emitToken(try tokenHandler.createCharacter('<'));
                         Token.emitToken(try tokenHandler.createCharacter('/'));
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .RCDATA;
                     }
                 } else {
                     // EOF is Anything else
                     Token.emitToken(try tokenHandler.createCharacter('<'));
                     Token.emitToken(try tokenHandler.createCharacter('/'));
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .RCDATA;
                 }
             },
             .RCADATAEndTagName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
                     if (std.ascii.isWhitespace(char)) {
@@ -416,17 +416,17 @@ pub const HtmlLexer = struct {
                 }
             },
             .RAWTEXTLessThanSign => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer.clearAndFree(lexer.allocator);
+                        tempBuffer.clearAndFree(self.allocator);
                         continue :sw .RAWTEXTEndTagOpen;
                     }
                     // Anything else
                     else {
                         Token.emitToken(try tokenHandler.createCharacter('<'));
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .RAWTEXT;
                     }
                 }
@@ -434,7 +434,7 @@ pub const HtmlLexer = struct {
                 else {}
             },
             .RAWTEXTEndTagOpen => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
@@ -444,19 +444,19 @@ pub const HtmlLexer = struct {
                     // Anything else
                     else {
                         Token.emitToken(try tokenHandler.createCharacter('<'));
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .RAWTEXT;
                     }
                 }
                 // EOF is Anything else
                 else {
                     Token.emitToken(try tokenHandler.createCharacter('<'));
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .RAWTEXT;
                 }
             },
             .RAWTEXTEndTagName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
                     if (std.ascii.isWhitespace(char)) {
@@ -499,11 +499,11 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataLessThanSign => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer.clearAndFree(lexer.allocator);
+                        tempBuffer.clearAndFree(self.allocator);
                         continue :sw .ScriptDataEndTagOpen;
                     }
                     // U+0021 EXCLAMATION MARK (!)
@@ -515,19 +515,19 @@ pub const HtmlLexer = struct {
                     // Anything else
                     else {
                         Token.emitToken(try tokenHandler.createCharacter('<'));
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .ScriptData;
                     }
                 }
                 // EOF is Anything else
                 else {
                     Token.emitToken(try tokenHandler.createCharacter('<'));
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .ScriptData;
                 }
             },
             .ScriptDataEndTagOpen => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
@@ -550,7 +550,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEndTagName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
                     if (std.ascii.isWhitespace(char)) {
@@ -595,7 +595,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEscapeStart => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -604,18 +604,18 @@ pub const HtmlLexer = struct {
                     }
                     // Anything else
                     else {
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .ScriptData;
                     }
                 }
                 // EOF is Anything else
                 else {
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .ScriptData;
                 }
             },
             .ScriptDataEscapeStartDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -624,18 +624,18 @@ pub const HtmlLexer = struct {
                     }
                     // Anything else
                     else {
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .ScriptData;
                     }
                 }
                 // EOF is Anything else
                 else {
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .ScriptData;
                 }
             },
             .ScriptDataEscaped => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -663,7 +663,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEscapedDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -692,7 +692,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEscapedDashDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -730,18 +730,18 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEscapedLessThanSign => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer.clearAndFree(lexer.allocator);
+                        tempBuffer.clearAndFree(self.allocator);
                         continue :sw .ScriptDataEscapedEndTagOpen;
                     }
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
-                        tempBuffer.clearAndFree(lexer.allocator);
+                        tempBuffer.clearAndFree(self.allocator);
                         Token.emitToken(try tokenHandler.createCharacter('<'));
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .ScriptDataDoubleEscapeStart;
                     }
                     // Anything else
@@ -757,7 +757,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEscapedEndTagOpen => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     if (std.ascii.isAlphabetic(char)) {
                         current_token = try tokenHandler.createEndTag();
@@ -779,7 +779,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataEscapedEndTagName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
                     if (std.ascii.isWhitespace(char)) {
@@ -829,7 +829,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataDoubleEscapeStart => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     if (std.ascii.isWhitespace(char) or char == '/' or char == '>') {
                         // If the temporary buffer is the string "script",
@@ -845,7 +845,7 @@ pub const HtmlLexer = struct {
                 } else {}
             },
             .ScriptDataDoubleEscaped => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -877,7 +877,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataDoubleEscapedDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -909,7 +909,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataDoubleEscapedDashDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
@@ -947,28 +947,28 @@ pub const HtmlLexer = struct {
                 }
             },
             .ScriptDataDoubleEscapedLessThanSign => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
-                        tempBuffer.clearAndFree(lexer.allocator);
+                        tempBuffer.clearAndFree(self.allocator);
                         Token.emitToken(try tokenHandler.createCharacter('/'));
                         continue :sw .ScriptDataDoubleEscaped;
                     }
                     // Anything else
                     else {
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .ScriptDataDoubleEscaped;
                     }
                 }
                 // EOF is Anything else
                 else {
-                    lexer.stream.reconsumeChar();
+                    self.stream.reconsumeChar();
                     continue :sw .ScriptDataDoubleEscaped;
                 }
             },
             .ScriptDataDoubleEscapeEnd => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     if (std.ascii.isWhitespace(char) or char == '/' or char == '>') {
                         if (std.mem.eql(u8, tempBuffer.items, "script")) {
@@ -991,109 +991,166 @@ pub const HtmlLexer = struct {
                         }
                         // Anything else
                         else {
-                            lexer.stream.reconsumeChar();
+                            self.stream.reconsumeChar();
                             continue :sw .ScriptDataDoubleEscaped;
                         }
                     }
-                } else {}
+                }
+                // Eof is Anything else
+                else {
+                    self.stream.reconsumeChar();
+                    continue :sw .ScriptDataDoubleEscaped;
+                }
             },
             .BeforeAttributeName => {
-                current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                current_input_character = self.stream.consumeChar();
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeAttributeName;
+                    }
+                    // U+002F SOLIDUS (/) and U+003E GREATER-THAN SIGN (>)
+                    if (char == '/' and char == '>') {
+                        self.stream.reconsumeChar();
+                        continue :sw .AttributeName;
+                    }
+                    // U+003D EQUALS SIGN (=)
+                    if (char == '=') {
+                        // unexpected-equals-sign-before-attribute-name parse error
+                        try current_token.Tag.attributes.addAttribute();
+                        try current_token.Tag.attributes.appendAttrName(char);
+                        continue :sw .AttributeName;
+                    }
+                    // Anything else
+                    else {
+                        try current_token.Tag.attributes.addAttribute();
+                        self.stream.reconsumeChar();
+                        continue :sw .AttributeName;
+                    }
+                }
+                // EOF
+                else {
+                    self.stream.reconsumeChar();
+                    continue :sw .AttributeName;
+                }
             },
             .AttributeName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char) or char == '/' or char == '>') {
+                        self.stream.reconsumeChar();
+                        continue :sw .AfterAttributeName;
+                    }
+                    if (char == '=') {
+                        continue :sw .BeforeAttributeValue;
+                    }
+                    if (std.ascii.isAlphabetic(char) and std.ascii.isUpper(char)) {
+                        current_token.Tag.attributes.appendAttrName(std.ascii.toLower(char));
+                        continue :sw .AttributeName;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .AfterAttributeName;
+                }
+            },
+            // ASCII upper alpha
+            // Append the lowercase version of the current input character (add 0x0020 to the character's code point) to the current attribute's name.
+            // U+0000 NULL
+            // This is an unexpected-null-character parse error. Append a U+FFFD REPLACEMENT CHARACTER character to the current attribute's name.
+            // U+0022 QUOTATION MARK (")
+            // U+0027 APOSTROPHE (')
+            // U+003C LESS-THAN SIGN (<)
+            // This is an unexpected-character-in-attribute-name parse error. Treat it as per the "anything else" entry below.
+            // Anything else
+            // Append the current input character to the current attribute's name.
+            .AfterAttributeName => {
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
-            .AfterattributeName => {
-                current_input_character = lexer.stream.consumeChar();
+            .BeforeAttributeValue => {
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
-            .Beforeattributevalue => {
-                current_input_character = lexer.stream.consumeChar();
+            .AttributeValueDoubleQuoted => {
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
-            .Attributevaluedoublequoted => {
-                current_input_character = lexer.stream.consumeChar();
+            .AttributeValueSingleQuoted => {
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
-            .Attributevaluesinglequoted => {
-                current_input_character = lexer.stream.consumeChar();
+            .AttributeValueUnquoted => {
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
-            .Attributevalueunquoted => {
-                current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
-            },
-            .Afterattributevaluequoted => {
-                current_input_character = lexer.stream.consumeChar();
+            .AfterAttributeValueQuoted => {
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .SelfClosingStartTag => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .BogusComment => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .MarkupDeclarationOpen => {
-                if (lexer.stream.consumeString("DOCTYPE")) {
+                if (self.stream.consumeString("DOCTYPE")) {
                     continue :sw .DOCTYPE;
                 }
             },
             .Commentstart => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentstartDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Comment => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentLessThanSign => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentLessThanSignbang => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentLessThanSignbangDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentLessThanSignbangDashDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentEndDash => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentEnd => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CommentEndbang => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .DOCTYPE => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     if (std.ascii.isWhitespace(char)) {
                         continue :sw .BeforeDOCTYPEName;
                     }
                     if (char == '>') {
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .BeforeDOCTYPEName;
                     } else {
                         // missing-whitespace-before-doctype-name parse error
-                        lexer.stream.reconsumeChar();
+                        self.stream.reconsumeChar();
                         continue :sw .BeforeDOCTYPEName;
                     }
                 } else {
@@ -1104,7 +1161,7 @@ pub const HtmlLexer = struct {
                 }
             },
             .BeforeDOCTYPEName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
                     if (std.ascii.isWhitespace(char)) {
                         continue :sw .BeforeDOCTYPEName;
@@ -1140,122 +1197,137 @@ pub const HtmlLexer = struct {
                 }
             },
             .DOCTYPEName => {
-                current_input_character = lexer.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
-//                 U+0009 CHARACTER TABULATION (tab)
-// U+000A LINE FEED (LF)
-// U+000C FORM FEED (FF)
-// U+0020 SPACE
-// Switch to the after DOCTYPE name state.
-// U+003E GREATER-THAN SIGN (>)
-// Switch to the data state. Emit the current DOCTYPE token.
-// ASCII upper alpha
-// Append the lowercase version of the current input character (add 0x0020 to the character's code point) to the current DOCTYPE token's name.
-// U+0000 NULL
-// This is an unexpected-null-character parse error. Append a U+FFFD REPLACEMENT CHARACTER character to the current DOCTYPE token's name.
-// EOF
-// This is an eof-in-doctype parse error. Set the current DOCTYPE token's force-quirks flag to on. Emit the current DOCTYPE token. Emit an end-of-file token.
-// Anything else
-// Append the current input character to the current DOCTYPE token's name.
-// 
+                current_input_character = self.stream.consumeChar();
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .AfterDOCTYPEName;
+                    }
+                    // U+003E GREATER-THAN SIGN (>)
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    // ASCII upper alpha
+                    if (std.ascii.isAlphabetic(char) and std.ascii.isUpper(char)) {
+                        try current_token.DOCTYPE.name.append(tokenHandler.allocator, std.ascii.toLower(char));
+                        continue :sw .DOCTYPEName;
+                    }
+                    // U+0000 NULL
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        continue :sw .DOCTYPEName;
+                    }
+                    // Anything else
+                    else {
+                        try current_token.DOCTYPE.name.append(tokenHandler.allocator, char);
+                        continue :sw .DOCTYPEName;
+                    }
+                }
+                // EOF
+                else {
+                    //eof-in-doctype parse error
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                }
             },
             .AfterDOCTYPEName => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .AfterDOCTYPEpublickeyword => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .BeforeDOCTYPEpublicidentifier => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .DOCTYPEpublicidentifierdoublequoted => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .DOCTYPEpublicidentifiersinglequoted => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .AfterDOCTYPEpublicidentifier => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .BetweenDOCTYPEpublicandsystemidentifiers => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .AfterDOCTYPEsystemkeyword => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .BeforeDOCTYPEsystemidentifier => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .DOCTYPEsystemidentifierdoublequoted => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .DOCTYPEsystemidentifiersinglequoted => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .AfterDOCTYPEsystemidentifier => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .BogusDOCTYPE => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CDATAsection => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CDATAsectionbracket => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CDATAsectionEnd => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .CharacterReference => {
-                unreachable;
+                current_input_character = self.stream.consumeChar();
+                if (current_input_character) |_| {} else {}
             },
             .Namedcharacterreference => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Ambiguousampersand => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Numericcharacterreference => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Hexadecimalcharacterreferencestart => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Decimalcharacterreferencestart => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Hexadecimalcharacterreference => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .Decimalcharacterreference => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
             .NumericcharacterreferenceEnd => {
-                current_input_character = lexer.stream.consumeChar();
+                current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
         }
