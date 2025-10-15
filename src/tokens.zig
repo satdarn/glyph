@@ -1,5 +1,10 @@
 const std = @import("std");
 
+const tokErrors = error{
+    WrongTagType,
+    NoAttribute,
+};
+
 pub const Token = union(enum) {
     DOCTYPE: struct {
         name: std.ArrayList(u8),
@@ -11,7 +16,7 @@ pub const Token = union(enum) {
         type: enum { StartTag, EndTag },
         tagName: std.ArrayList(u8),
         selfClosing: bool,
-        attributes: []Attributes,
+        attributes: AttributeList,
     },
     Comment: struct {
         data: []const u8,
@@ -19,6 +24,7 @@ pub const Token = union(enum) {
     Character: struct {
         data: []const u8,
     },
+    ReplacementCharacter: void, // REPLACEMENT CHARACTER character token U+FFFD
     EndOfFile: void,
     pub fn emitToken(token: *Token) void {
         switch (token.*) {
@@ -50,6 +56,7 @@ pub const Token = union(enum) {
                 std.debug.print("Character TKN\n", .{});
                 std.debug.print("   data: {s}\n", .{tok.data});
             },
+            .ReplacementCharacter => std.debug.print("EOF TKN\n", .{}),
             .EndOfFile => std.debug.print("EOF TKN\n", .{}),
         }
     }
@@ -71,6 +78,7 @@ pub const TokenHandler = struct {
         for (self.tokenRefList.items) |tok| {
             if (tok.* == .Tag) {
                 tok.Tag.tagName.deinit(self.allocator);
+                tok.Tag.attributes.deinit();
             }
             if (tok.* == .DOCTYPE) {
                 tok.DOCTYPE.name.deinit(self.allocator);
@@ -98,7 +106,7 @@ pub const TokenHandler = struct {
             .type = .StartTag,
             .tagName = tagName,
             .selfClosing = false,
-            .attributes = &[_]Attributes{},
+            .attributes = try AttributeList.init(self.allocator),
         } };
         try self.tokenRefList.append(self.allocator, tok);
         return tok;
@@ -111,7 +119,7 @@ pub const TokenHandler = struct {
             .type = .EndTag,
             .tagName = tagName,
             .selfClosing = false,
-            .attributes = &[_]Attributes{},
+            .attributes = try AttributeList.init(self.allocator),
         } };
         try self.tokenRefList.append(self.allocator, tok);
         return tok;
@@ -129,6 +137,12 @@ pub const TokenHandler = struct {
         try self.tokenRefList.append(self.allocator, tok);
         return tok;
     }
+    pub fn createReplacement(self: *TokenHandler) !*Token {
+        const tok: *Token = try self.allocator.create(Token);
+        tok.* = .{ .ReplacementCharacter = {} };
+        try self.tokenRefList.append(self.allocator, tok);
+        return tok;
+    }
     pub fn createEOF(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
         tok.* = .{ .EndOfFile = {} };
@@ -137,7 +151,56 @@ pub const TokenHandler = struct {
     }
 };
 
-pub const Attributes = struct {
-    name: []const u8,
-    value: []const u8,
+pub const Attribute = struct {
+    name: ?std.ArrayList(u8),
+    value: ?std.ArrayList(u8),
+};
+
+pub const AttributeList = struct {
+    list: std.ArrayList(Attribute),
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) !AttributeList {
+        return .{ .list = try std.ArrayList(Attribute).initCapacity(allocator, 3), .allocator = allocator };
+    }
+    pub fn deinit(self: *AttributeList) void {
+        var i: usize = 0;
+        while (i < self.list.items.len) : (i += 1) {
+            if (self.list.items[i].name) |*name| {
+                name.deinit(self.allocator);
+            }
+            if (self.list.items[i].value) |*value| {
+                value.deinit(self.allocator);
+            }
+        }
+        self.list.deinit(self.allocator);
+    }
+
+    pub fn addAttribute(self: *AttributeList) !void {
+        try self.list.append(self.allocator, .{ .name = null, .value = null });
+    }
+
+    pub fn appendAttrName(self: *AttributeList, data: u8) !void {
+        if (self.list.items.len != 0) {
+            return tokErrors.NoAttribute;
+        }
+        if (self.list.items[self.list.items.len - 1].name == null) {
+            self.list.items[self.list.items.len - 1].name = try std.ArrayList(u8).initCapacity(self.allocator, 10);
+        }
+        if (self.list.items[self.list.items.len - 1].name) |*name| {
+            try name.append(self.allocator, data);
+        }
+    }
+
+    pub fn appendAttrData(self: *AttributeList, data: u8) !void {
+        if (self.list.items.len != 0) {
+            return tokErrors.NoAttribute;
+        }
+        if (self.list.items[self.list.items.len - 1].data == null) {
+            self.list.items[self.list.items.len - 1].data = try std.ArrayList(u8).initCapacity(self.allocator, 10);
+        }
+        if (self.list.items[self.list.items.len - 1].data) |*data_str| {
+            try data_str.append(self.allocator, data);
+        }
+    }
 };
