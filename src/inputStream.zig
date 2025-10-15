@@ -15,7 +15,8 @@ pub const InputStream = struct {
         }
         const char_ret = stream.data[stream.pos];
         stream.pos += 1;
-        return char_ret; 
+        std.debug.print("{c}\n", .{char_ret});
+        return char_ret;
     }
 
     pub fn reconsumeChar(stream: *InputStream) void {
@@ -30,20 +31,12 @@ pub const InputStream = struct {
     }
 
     pub fn nextCharsAre(stream: *InputStream, string: []const u8) bool {
-        for (string, 0..) |checkChar, i| {
-            const maybeChar: ?u8 = stream.peek(i);
-            if (maybeChar) |char| {
-                if (char != checkChar) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-        return true;
+        const streamString = stream.data[stream.pos .. stream.pos + string.len];
+        return std.mem.eql(u8, streamString, string);
     }
 
     pub fn consumeString(stream: *InputStream, string: []const u8) bool {
+        std.debug.print("{s}\n", .{string});
         if (stream.nextCharsAre(string)) {
             stream.pos += string.len;
             return true;
