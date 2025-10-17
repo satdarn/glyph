@@ -19,7 +19,7 @@ pub const Token = union(enum) {
         attributes: AttributeList,
     },
     Comment: struct {
-        data: []const u8,
+        data: std.ArrayList(u8),
     },
     Character: struct {
         data: []const u8,
@@ -40,17 +40,15 @@ pub const Token = union(enum) {
                     std.debug.print("StartTag TKN\n", .{});
                     std.debug.print("   tagName : {s}\n", .{tok.tagName.items});
                     std.debug.print("   selfClosing : {}\n", .{tok.selfClosing});
-                    std.debug.print("   selfClosing : {}\n", .{tok.selfClosing});
                 } else {
                     std.debug.print("EndTag TKN\n", .{});
                     std.debug.print("   tagName : {s}\n", .{tok.tagName.items});
-                    std.debug.print("   selfClosing : {}\n", .{tok.selfClosing});
                     std.debug.print("   selfClosing : {}\n", .{tok.selfClosing});
                 }
             },
             .Comment => |tok| {
                 std.debug.print("Comment TKN\n", .{});
-                std.debug.print("   data: {s}\n", .{tok.data});
+                std.debug.print("   data: {s}\n", .{tok.data.items});
             },
             .Character => |tok| {
                 std.debug.print("Character TKN\n", .{});
@@ -84,6 +82,9 @@ pub const TokenHandler = struct {
                 tok.DOCTYPE.name.deinit(self.allocator);
                 tok.DOCTYPE.publicIdent.deinit(self.allocator);
                 tok.DOCTYPE.systemIdent.deinit(self.allocator);
+            }
+            if (tok.* == .Comment) {
+                tok.Comment.data.deinit(self.allocator);
             }
             self.allocator.destroy(tok);
         }
@@ -125,10 +126,11 @@ pub const TokenHandler = struct {
         return tok;
     }
 
-    pub fn createComment(self: *TokenHandler, data: u8) !*Token {
+    pub fn createComment(self: *TokenHandler, data :u8) !*Token {
         const tok: *Token = try self.allocator.create(Token);
-        tok.* = .{ .Comment = .{ .data = &[1]u8{data} } };
+        tok.* = .{ .Comment = .{ .data = try std.ArrayList(u8).initCapacity(self.allocator, 32)} };
         try self.tokenRefList.append(self.allocator, tok);
+        if (data != 0) try tok.Comment.data.append(self.allocator, data);
         return tok;
     }
     pub fn createCharacter(self: *TokenHandler, data: u8) !*Token {
@@ -196,10 +198,10 @@ pub const AttributeList = struct {
         if (self.list.items.len != 0) {
             return tokErrors.NoAttribute;
         }
-        if (self.list.items[self.list.items.len - 1].data == null) {
-            self.list.items[self.list.items.len - 1].data = try std.ArrayList(u8).initCapacity(self.allocator, 10);
+        if (self.list.items[self.list.items.len - 1].value == null) {
+            self.list.items[self.list.items.len - 1].value = try std.ArrayList(u8).initCapacity(self.allocator, 10);
         }
-        if (self.list.items[self.list.items.len - 1].data) |*data_str| {
+        if (self.list.items[self.list.items.len - 1].value) |*data_str| {
             try data_str.append(self.allocator, data);
         }
     }

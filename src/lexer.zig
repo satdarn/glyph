@@ -46,31 +46,31 @@ const LexerStates = enum {
     SelfClosingStartTag,
     BogusComment,
     MarkupDeclarationOpen,
-    Commentstart,
-    CommentstartDash,
+    CommentStart,
+    CommentStartDash,
     Comment,
     CommentLessThanSign,
-    CommentLessThanSignbang,
-    CommentLessThanSignbangDash,
-    CommentLessThanSignbangDashDash,
+    CommentLessThanSignBang,
+    CommentLessThanSignBangDash,
+    CommentLessThanSignBangDashDash,
     CommentEndDash,
     CommentEnd,
-    CommentEndbang,
+    CommentEndBang,
     DOCTYPE,
     BeforeDOCTYPEName,
     DOCTYPEName,
     AfterDOCTYPEName,
-    AfterDOCTYPEpublickeyword,
-    BeforeDOCTYPEpublicidentifier,
-    DOCTYPEpublicidentifierdoublequoted,
-    DOCTYPEpublicidentifiersinglequoted,
-    AfterDOCTYPEpublicidentifier,
-    BetweenDOCTYPEpublicandsystemidentifiers,
-    AfterDOCTYPEsystemkeyword,
-    BeforeDOCTYPEsystemidentifier,
-    DOCTYPEsystemidentifierdoublequoted,
-    DOCTYPEsystemidentifiersinglequoted,
-    AfterDOCTYPEsystemidentifier,
+    AfterDOCTYPEPublicKeyword,
+    BeforeDOCTYPEPublicIdentifier,
+    DOCTYPEPublicIdentifierDoubleQuoted,
+    DOCTYPEPublicIdentifierSingleQuoted,
+    AfterDOCTYPEPublicIdentifier,
+    BetweenDOCTYPEPublicAndSystemIdentifiers,
+    AfterDOCTYPESystemKeyword,
+    BeforeDOCTYPESystemIdentifier,
+    DOCTYPESystemIdentifierDoubleQuoted,
+    DOCTYPESystemIdentifierSingleQuoted,
+    AfterDOCTYPESystemIdentifier,
     BogusDOCTYPE,
     CDATAsection,
     CDATAsectionbracket,
@@ -1067,81 +1067,403 @@ pub const HtmlLexer = struct {
             },
             .AfterAttributeName => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .AfterAttributeName;
+                    }
+                    if (char == '/') {
+                        continue :sw .SelfClosingStartTag;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.Tag.attributes.appendAttrName(char);
+                        continue :sw .AttributeName;
+                    }
+                } else {
+                    // eof-in-tag parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .BeforeAttributeValue => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeAttributeValue;
+                    }
+                    if (char == '\"') {
+                        continue :sw .AttributeValueDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        continue :sw .AttributeValueSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // missing-attribute-value parse error
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        self.stream.reconsumeChar();
+                        continue :sw .AttributeValueUnquoted;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .AttributeValueUnquoted;
+                }
             },
+
             .AttributeValueDoubleQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '\"') {
+                        continue :sw .AfterAttributeValueQuoted;
+                    }
+                    if (char == '&') {
+                        self.return_state = .AttributeValueDoubleQuoted;
+                        continue :sw .CharacterReference;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        // Append a U+FFFD REPLACEMENT CHARACTER character to the current attribute's value.
+                        continue :sw .AttributeValueDoubleQuoted;
+                    } else {
+                        try current_token.Tag.attributes.appendAttrData(char);
+                        continue :sw .AttributeValueDoubleQuoted;
+                    }
+                } else {
+                    // eof-in-tag parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .AttributeValueSingleQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '\'') {
+                        continue :sw .AfterAttributeValueQuoted;
+                    }
+                    if (char == '&') {
+                        self.return_state = .AttributeValueSingleQuoted;
+                        continue :sw .CharacterReference;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        // Append a U+FFFD REPLACEMENT CHARACTER character to the current attribute's value.
+                        continue :sw .AttributeValueSingleQuoted;
+                    } else {
+                        try current_token.Tag.attributes.appendAttrData(char);
+                        continue :sw .AttributeValueSingleQuoted;
+                    }
+                } else {
+                    // eof-in-tag parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .AttributeValueUnquoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeAttributeName;
+                    }
+                    if (char == '&') {
+                        self.return_state = .AttributeValueUnquoted;
+                        continue :sw .CharacterReference;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        // Append a U+FFFD REPLACEMENT CHARACTER character to the current attribute's value.
+                        continue :sw .AttributeValueUnquoted;
+                    }
+                    if (char == '\"' or char == '\'' or char == '<' or char == '=' or char == '`') {
+                        // unexpected-character-in-unquoted-attribute-value parse error
+                        // Treat it as per the "anything else" entry below.
+                        try current_token.Tag.attributes.appendAttrData(char);
+                        continue :sw .AttributeValueUnquoted;
+                    } else {
+                        try current_token.Tag.attributes.appendAttrData(char);
+                        continue :sw .AttributeValueUnquoted;
+                    }
+                } else {
+                    // eof-in-tag parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .AfterAttributeValueQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeAttributeName;
+                    }
+                    if (char == '/') {
+                        continue :sw .SelfClosingStartTag;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // missing-whitespace-between-attributes parse error
+                        self.stream.reconsumeChar();
+                        continue :sw .BeforeAttributeName;
+                    }
+                } else {
+                    // eof-in-tag parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .SelfClosingStartTag => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '>') {
+                        current_token.Tag.selfClosing = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // unexpected-solidus-in-tag parse error
+                        self.stream.reconsumeChar();
+                        continue :sw .BeforeAttributeName;
+                    }
+                } else {
+                    // eof-in-tag parse error
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .BogusComment => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '>') {
+                        current_token.Tag.selfClosing = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        continue :sw .BogusComment;
+                    } else {
+                        try current_token.Comment.data.append(tokenHandler.allocator, char);
+                    }
+                } else {
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                }
             },
+
             .MarkupDeclarationOpen => {
                 if (self.stream.consumeString("DOCTYPE")) {
                     continue :sw .DOCTYPE;
                 }
+                if (self.stream.consumeString("--")) {
+                    current_token = try tokenHandler.createComment(0);
+                    continue :sw .CommentStart;
+                } else {
+                    current_token = try tokenHandler.createComment(0);
+                    continue :sw .BogusComment;
+                }
             },
-            .Commentstart => {
+            .CommentStart => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '-') {
+                        continue :sw .CommentStartDash;
+                    }
+                    if (char == '>') {
+                        // abrupt-closing-of-empty-comment parse error
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        self.stream.reconsumeChar();
+                        continue :sw .Comment;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .Comment;
+                }
             },
-            .CommentstartDash => {
+            .CommentStartDash => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '-') {
+                        continue :sw .CommentEnd;
+                    }
+                    if (char == '>') {
+                        // abrupt-closing-of-empty-comment parse error
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        self.stream.reconsumeChar();
+                        continue :sw .Comment;
+                    }
+                } else {
+                    // eof-in-comment parse error
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
+
             .Comment => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '<') {
+                        try current_token.Comment.data.append(tokenHandler.allocator, char);
+                        continue :sw .CommentLessThanSign;
+                    }
+                    if (char == '-') {
+                        continue :sw .CommentEndDash;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        continue :sw .Comment;
+                    }
+                } else {
+                    // eof-in-comment parse error
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .CommentLessThanSign => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '!') {
+                        try current_token.Comment.data.append(tokenHandler.allocator, char);
+                        continue :sw .CommentLessThanSignBang;
+                    }
+                    if (char == '<') {
+                        try current_token.Comment.data.append(tokenHandler.allocator, char);
+                        continue :sw .CommentLessThanSign;
+                    } else {
+                        self.stream.reconsumeChar();
+                        continue :sw .Comment;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .Comment;
+                }
             },
-            .CommentLessThanSignbang => {
+            .CommentLessThanSignBang => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '-') {
+                        continue :sw .CommentLessThanSignBangDash;
+                    } else {
+                        self.stream.reconsumeChar();
+                        continue :sw .Comment;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .Comment;
+                }
             },
-            .CommentLessThanSignbangDash => {
+            .CommentLessThanSignBangDash => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '-') {
+                        continue :sw .CommentLessThanSignBangDashDash;
+                    } else {
+                        self.stream.reconsumeChar();
+                        continue :sw .CommentEndDash;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .CommentEndDash;
+                }
             },
-            .CommentLessThanSignbangDashDash => {
+            .CommentLessThanSignBangDashDash => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '>') {
+                        self.stream.reconsumeChar();
+                        continue :sw .CommentEnd;
+                    } else {
+                        // nested-comment parse error
+                        self.stream.reconsumeChar();
+                        continue :sw .CommentEnd;
+                    }
+                } else {
+                    self.stream.reconsumeChar();
+                    continue :sw .CommentEnd;
+                }
             },
             .CommentEndDash => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '-') {
+                        continue :sw .CommentEnd;
+                    } else {
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        self.stream.reconsumeChar();
+                        continue :sw .Comment;
+                    }
+                } else {
+                    // eof-in-comment parse error
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .CommentEnd => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    if (char == '!') {
+                        continue :sw .CommentEndBang;
+                    }
+                    if (char == '-') {
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        continue :sw .CommentEnd;
+                    } else {
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        continue :sw .Comment;
+                    }
+                } else {
+                    // eof-in-comment parse error
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .CommentEndbang => {
+            .CommentEndBang => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '-') {
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        try current_token.Comment.data.append(tokenHandler.allocator, '!');
+                        continue :sw .CommentEndDash;
+                    }
+                    if (char == '>') {
+                        // incorrectly-closed-comment parse error
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        try current_token.Comment.data.append(tokenHandler.allocator, '-');
+                        try current_token.Comment.data.append(tokenHandler.allocator, '!');
+                        continue :sw .Comment;
+                    }
+                } else {
+                    // eof-in-comment parse error
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
+            // Anything else
+            // Append two U+002D HYPHEN-MINUS characters (-) and a U+0021 EXCLAMATION MARK character (!) to the comment token's data. Reconsume in the comment state.
             .DOCTYPE => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |char| {
@@ -1231,108 +1553,507 @@ pub const HtmlLexer = struct {
                     //eof-in-doctype parse error
                     Token.emitToken(current_token);
                     Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
                 }
             },
             .AfterDOCTYPEName => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .AfterDOCTYPEName;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    self.stream.case_sensitive = false;
+                    self.stream.reconsumeChar();
+                    if (self.stream.consumeString("public")) {
+                        continue :sw .AfterDOCTYPEPublicKeyword;
+                    }
+                    if (self.stream.consumeString("system")) {
+                        continue :sw .AfterDOCTYPESystemKeyword;
+                    } else {
+                        // invalid-character-sequence-after-doctype-name parse error
+                        self.stream.case_sensitive = true;
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .AfterDOCTYPEpublickeyword => {
+            .AfterDOCTYPEPublicKeyword => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .AfterDOCTYPEPublicKeyword;
+                    }
+                    if (char == '"') {
+                        current_token.DOCTYPE.publicIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPEPublicIdentifierDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        current_token.DOCTYPE.publicIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPEPublicIdentifierSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // missing-doctype-public-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // missing-quote-before-doctype-public-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .BeforeDOCTYPEpublicidentifier => {
+            .BeforeDOCTYPEPublicIdentifier => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeDOCTYPEPublicIdentifier;
+                    }
+                    if (char == '"') {
+                        current_token.DOCTYPE.publicIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPEPublicIdentifierDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        current_token.DOCTYPE.publicIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPEPublicIdentifierSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // missing-doctype-public-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // missing-quote-before-doctype-public-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .DOCTYPEpublicidentifierdoublequoted => {
+            .DOCTYPEPublicIdentifierDoubleQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '"') {
+                        continue :sw .AfterDOCTYPEPublicIdentifier;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        continue :sw .DOCTYPEPublicIdentifierDoubleQuoted;
+                    }
+                    if (char == '>') {
+                        // abrupt-doctype-public-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.DOCTYPE.publicIdent.append(tokenHandler.allocator, char);
+                        continue :sw .DOCTYPEPublicIdentifierDoubleQuoted;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .DOCTYPEpublicidentifiersinglequoted => {
+            .DOCTYPEPublicIdentifierSingleQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '\'') {
+                        continue :sw .AfterDOCTYPEPublicIdentifier;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        continue :sw .DOCTYPEPublicIdentifierSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // abrupt-doctype-public-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.DOCTYPE.publicIdent.append(tokenHandler.allocator, char);
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .AfterDOCTYPEpublicidentifier => {
+            .AfterDOCTYPEPublicIdentifier => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BetweenDOCTYPEPublicAndSystemIdentifiers;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    if (char == '"') {
+                        // missing-whitespace-between-doctype-public-and-system-identifiers parse error
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        // missing-whitespace-between-doctype-public-and-system-identifiers parse error
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierSingleQuoted;
+                    } else {
+                        // missing-quote-before-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .BetweenDOCTYPEpublicandsystemidentifiers => {
+            .BetweenDOCTYPEPublicAndSystemIdentifiers => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BetweenDOCTYPEPublicAndSystemIdentifiers;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    if (char == '"') {
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierSingleQuoted;
+                    } else {
+                        // missing-quote-before-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .AfterDOCTYPEsystemkeyword => {
+            .AfterDOCTYPESystemKeyword => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeDOCTYPESystemIdentifier;
+                    }
+                    if (char == '"') {
+                        // missing-whitespace-after-doctype-system-keyword parse error
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        // missing-whitespace-after-doctype-system-keyword parse error
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPEPublicIdentifierSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // missing-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // missing-quote-before-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .BeforeDOCTYPEsystemidentifier => {
+            .BeforeDOCTYPESystemIdentifier => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .BeforeDOCTYPESystemIdentifier;
+                    }
+                    if (char == '"') {
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierDoubleQuoted;
+                    }
+                    if (char == '\'') {
+                        current_token.DOCTYPE.systemIdent.clearAndFree(tokenHandler.allocator);
+                        continue :sw .DOCTYPESystemIdentifierSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // missing-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // missing-quote-before-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .DOCTYPEsystemidentifierdoublequoted => {
+            .DOCTYPESystemIdentifierDoubleQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '"') {
+                        continue :sw .AfterDOCTYPESystemIdentifier;
+                    }
+                    if (char == 0) {
+                        continue :sw .DOCTYPESystemIdentifierDoubleQuoted;
+                    }
+                    if (char == '>') {
+                        // abrupt-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.DOCTYPE.systemIdent.append(tokenHandler.allocator, char);
+                        continue :sw .DOCTYPESystemIdentifierDoubleQuoted;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .DOCTYPEsystemidentifiersinglequoted => {
+            .DOCTYPESystemIdentifierSingleQuoted => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '\'') {
+                        continue :sw .AfterDOCTYPESystemIdentifier;
+                    }
+                    if (char == 0) {
+                        continue :sw .DOCTYPEPublicIdentifierSingleQuoted;
+                    }
+                    if (char == '>') {
+                        // abrupt-doctype-system-identifier parse error
+                        current_token.DOCTYPE.forceQuirks = true;
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        try current_token.DOCTYPE.systemIdent.append(tokenHandler.allocator, char);
+                        continue :sw .DOCTYPEPublicIdentifierSingleQuoted;
+                    }
+                } else {
+                    // eof-in-doctype parse error
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
-            .AfterDOCTYPEsystemidentifier => {
+            .AfterDOCTYPESystemIdentifier => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        continue :sw .AfterDOCTYPESystemIdentifier;
+                    }
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    } else {
+                        // unexpected-character-after-doctype-system-identifier parse error
+                        self.stream.reconsumeChar();
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    current_token.DOCTYPE.forceQuirks = true;
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .BogusDOCTYPE => {
                 current_input_character = self.stream.consumeChar();
-                if (current_input_character) |_| {} else {}
+                if (current_input_character) |char| {
+                    if (char == '>') {
+                        Token.emitToken(current_token);
+                        continue :sw .Data;
+                    }
+                    if (char == 0) {
+                        // unexpected-null-character parse error
+                        continue :sw .BogusDOCTYPE;
+                    } else {
+                        continue :sw .BogusDOCTYPE;
+                    }
+                } else {
+                    Token.emitToken(current_token);
+                    Token.emitToken(try tokenHandler.createEOF());
+                    break :sw;
+                }
             },
             .CDATAsection => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // U+005D RIGHT SQUARE BRACKET (])
+            // Switch to the CDATA section bracket state.
+            // EOF
+            // This is an eof-in-cdata parse error. Emit an end-of-file token.
+            // Anything else
+            // Emit the current input character as a character token.
             .CDATAsectionbracket => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // U+005D RIGHT SQUARE BRACKET (])
+            // Switch to the CDATA section end state.
+            // Anything else
+            // Emit a U+005D RIGHT SQUARE BRACKET character token. Reconsume in the CDATA section state.
             .CDATAsectionEnd => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // U+005D RIGHT SQUARE BRACKET (])
+            // Emit a U+005D RIGHT SQUARE BRACKET character token.
+            // U+003E GREATER-THAN SIGN (>)
+            // Switch to the data state.
+            // Anything else
+            // Emit two U+005D RIGHT SQUARE BRACKET character tokens. Reconsume in the CDATA section state.
             .CharacterReference => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // Set the temporary buffer to the empty string. Append a U+0026 AMPERSAND (&) character to the temporary buffer. Consume the next input character:
+            // ASCII alphanumeric
+            // Reconsume in the named character reference state.
+            // U+0023 NUMBER SIGN (#)
+            // Append the current input character to the temporary buffer. Switch to the numeric character reference state.
+            // Anything else
+            // Flush code points consumed as a character reference. Reconsume in the return state.
             .Namedcharacterreference => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // Consume the maximum number of characters possible, where the consumed characters are one of the identifiers in the first column of the named character references table. Append each character to the temporary buffer when it's consumed.
+            // If there is a match
+            // If the character reference was consumed as part of an attribute, and the last character matched is not a U+003B SEMICOLON character (;), and the next input character is either a U+003D EQUALS SIGN character (=) or an ASCII alphanumeric, then, for historical reasons, flush code points consumed as a character reference and switch to the return state.
+            // Otherwise:
+            // If the last character matched is not a U+003B SEMICOLON character (;), then this is a missing-semicolon-after-character-reference parse error.
+            // Set the temporary buffer to the empty string. Append one or two characters corresponding to the character reference name (as given by the second column of the named character references table) to the temporary buffer.
+            // Flush code points consumed as a character reference. Switch to the return state.
+            // Otherwise
+            // Flush code points consumed as a character reference. Switch to the ambiguous ampersand state.
             .Ambiguousampersand => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // ASCII alphanumeric
+            // If the character reference was consumed as part of an attribute, then append the current input character to the current attribute's value. Otherwise, emit the current input character as a character token.
+            // U+003B SEMICOLON (;)
+            // This is an unknown-named-character-reference parse error. Reconsume in the return state.
+            // Anything else
+            // Reconsume in the return state.
             .Numericcharacterreference => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // U+0078 LATIN SMALL LETTER X
+            // U+0058 LATIN CAPITAL LETTER X
+            // Append the current input character to the temporary buffer. Switch to the hexadecimal character reference start state.
+            // Anything else
+            // Reconsume in the decimal character reference start state.
             .Hexadecimalcharacterreferencestart => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // ASCII hex digit
+            // Reconsume in the hexadecimal character reference state.
+            // Anything else
+            // This is an absence-of-digits-in-numeric-character-reference parse error. Flush code points consumed as a character reference. Reconsume in the return state.
             .Decimalcharacterreferencestart => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // Consume the next input character:
+            //
+            // ASCII digit
+            // Reconsume in the decimal character reference state.
+            // Anything else
+            // This is an absence-of-digits-in-numeric-character-reference parse error. Flush code points consumed as a character reference. Reconsume in the return state.
             .Hexadecimalcharacterreference => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // ASCII digit
+            // Multiply the character reference code by 16. Add a numeric version of the current input character (subtract 0x0030 from the character's code point) to the character reference code.
+            // ASCII upper hex digit
+            // Multiply the character reference code by 16. Add a numeric version of the current input character as a hexadecimal digit (subtract 0x0037 from the character's code point) to the character reference code.
+            // ASCII lower hex digit
+            // Multiply the character reference code by 16. Add a numeric version of the current input character as a hexadecimal digit (subtract 0x0057 from the character's code point) to the character reference code.
+            // U+003B SEMICOLON (;)
+            // Switch to the numeric character reference end state.
+            // Anything else
+            // This is a missing-semicolon-after-character-reference parse error. Reconsume in the numeric character reference end state.
             .Decimalcharacterreference => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // ASCII digit
+            // Multiply the character reference code by 10. Add a numeric version of the current input character (subtract 0x0030 from the character's code point) to the character reference code.
+            // U+003B SEMICOLON (;)
+            // Switch to the numeric character reference end state.
+            // Anything else
+            // This is a missing-semicolon-after-character-reference parse error. Reconsume in the numeric character reference end state.
             .NumericcharacterreferenceEnd => {
                 current_input_character = self.stream.consumeChar();
                 if (current_input_character) |_| {} else {}
             },
+            // Check the character reference code:
+            // If the number is 0x00, then this is a null-character-reference parse error. Set the character reference code to 0xFFFD.
+            // If the number is greater than 0x10FFFF, then this is a character-reference-outside-unicode-range parse error. Set the character reference code to 0xFFFD.
+            // If the number is a surrogate, then this is a surrogate-character-reference parse error. Set the character reference code to 0xFFFD.
+            // If the number is a noncharacter, then this is a noncharacter-character-reference parse error.
+            // If the number is 0x0D, or a control that's not ASCII whitespace, then this is a control-character-reference parse error. If the number is one of the numbers in the first column of the following table, then find the row with that number in the first column, and set the character reference code to the number in the second column of that row.
+
         }
     }
 };

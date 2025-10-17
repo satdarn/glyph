@@ -6,7 +6,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    const stream = InputStream.init("<!DOCTYPE html> \n <html> \n </html> \n");
+    const stream = InputStream.init("<!DOCTYPE html> \n <html> <p> </p>\n </html> \n");
     var lexer = HtmlLexer.init(allocator, stream);
     try lexer.run();
 }
