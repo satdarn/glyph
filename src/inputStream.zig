@@ -4,6 +4,7 @@ const std = @import("std");
 pub const InputStream = struct {
     data: []const u8,
     pos: usize = 0,
+    case_sensitive: bool = true,
 
     pub fn init(data: []const u8) InputStream {
         return .{ .data = data };
@@ -32,6 +33,14 @@ pub const InputStream = struct {
 
     pub fn nextCharsAre(stream: *InputStream, string: []const u8) bool {
         const streamString = stream.data[stream.pos .. stream.pos + string.len];
+        if (!stream.case_sensitive) {
+            for (streamString, 0..) |streamChar, i| {
+                if (std.ascii.toLower(streamChar) != std.ascii.toLower(string[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
         return std.mem.eql(u8, streamString, string);
     }
 
