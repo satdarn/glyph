@@ -157,17 +157,18 @@ pub const TokenHandler = struct {
         return tok;
     }
 
-    pub fn enqueue(self: *TokenHandler, new: *Token) !void{
+    pub fn enqueue(self: *TokenHandler, new: *Token) !void {
         try self.tokenQueue.append(self.allocator, new);
     }
-    pub fn dequeue(self: *TokenHandler) !*Token{
+    pub fn dequeue(self: *TokenHandler) !*Token {
         if (self.tokenQueue.items.len == 0) return tokErrors.NoElementsInQueue;
         const tok = self.tokenQueue.items[0];
+        if (tok.* == .EndOfFile) return tok; // this make sure that the there is always a EOF once lexing is complete
         _ = self.tokenQueue.orderedRemove(0);
         return tok;
     }
-    pub fn getQueueLen(self: *TokenHandler) usize{
-        return self.tokenQueue.items.len; 
+    pub fn getQueueLen(self: *TokenHandler) usize {
+        return self.tokenQueue.items.len;
     }
 };
 
@@ -222,6 +223,15 @@ pub const AttributeList = struct {
         if (self.list.items[self.list.items.len - 1].value) |*data_str| {
             try data_str.append(self.allocator, data);
         }
+    }
+    pub fn toStringHashMap(self: *AttributeList, allocator: std.mem.Allocator) !std.StringHashMap([]const u8) {
+        const attributes = std.StringHashMap([]const u8).init(allocator);
+        for (self.list.items) |attr| {
+            const attr_name = if (attr.name.items) |name| name else "__NO_ATTRIBUTE_NAME__";
+            const attr_value = if (attr.name.items) |name| name else "__NO_ATTRIBUTE_VALUE__";
+            try attributes.put(attr_name, attr_value);
+        }
+        return attributes;
     }
 };
 

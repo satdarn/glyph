@@ -16,7 +16,6 @@ pub const InputStream = struct {
         }
         const char_ret = stream.data[stream.pos];
         stream.pos += 1;
-        std.debug.print("{c}\n", .{char_ret});
         return char_ret;
     }
 
@@ -45,7 +44,6 @@ pub const InputStream = struct {
     }
 
     pub fn consumeString(stream: *InputStream, string: []const u8) bool {
-        std.debug.print("{s}\n", .{string});
         if (stream.nextCharsAre(string)) {
             stream.pos += string.len;
             return true;

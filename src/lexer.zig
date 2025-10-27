@@ -96,7 +96,7 @@ pub const HtmlLexer = struct {
     current_input_character: ?u8,
     tokenHandler: TokenHandler,
     tempBuffer: std.ArrayList(u8),
-    eof_flag: bool = false,
+    verbose: bool = false,
     pub fn init(allocator: std.mem.Allocator, input_stream: InputStream) !HtmlLexer {
         const tokenHandler = try TokenHandler.init(allocator);
         const tempBuffer: std.ArrayList(u8) = try std.ArrayList(u8).initCapacity(allocator, 10);
@@ -108,18 +108,22 @@ pub const HtmlLexer = struct {
     }
 
     pub fn nextToken(self: *HtmlLexer) !*Token {
-        while (self.tokenHandler.getQueueLen() == 0 and !self.eof_flag) {
+        while (self.tokenHandler.getQueueLen() == 0 and self.current_state != .EOF) {
             try self.run();
         }
-        return try self.tokenHandler.dequeue();
+        return self.tokenHandler.dequeue();
     }
 
     pub fn run(self: *HtmlLexer) !void {
-        std.debug.print("{s}\n", .{@tagName(self.current_state)});
+        if (self.verbose) std.debug.print("Lexer state: {s}\n", .{@tagName(self.current_state)});
         switch (self.current_state) {
             .Data => {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
+                    if (std.ascii.isWhitespace(char)) {
+                        self.current_state = .Data;
+                        return;
+                    }
                     // U+0026 AMPERSAND (&)
                     if (char == '&') {
                         self.return_state = .Data;
@@ -2345,7 +2349,6 @@ pub const HtmlLexer = struct {
             // If the number is a noncharacter, then this is a noncharacter-character-reference parse error.
             // If the number is 0x0D, or a control that's not ASCII whitespace, then this is a control-character-reference parse error. If the number is one of the numbers in the first column of the following table, then find the row with that number in the first column, and set the character reference code to the number in the second column of that row.
             .EOF => {
-                self.eof_flag = true;
                 return;
             },
         }
