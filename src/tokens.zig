@@ -3,6 +3,7 @@ const std = @import("std");
 const tokErrors = error{
     WrongTagType,
     NoAttribute,
+    NoElementsInQueue,
 };
 
 pub const Token = union(enum) {
@@ -63,13 +64,16 @@ pub const Token = union(enum) {
 pub const TokenHandler = struct {
     allocator: std.mem.Allocator,
     tokenRefList: std.ArrayList(*Token),
+    tokenQueue: std.ArrayList(*Token),
     pub fn init(allocator: std.mem.Allocator) !TokenHandler {
         // #TODO: optimize the size of the "Token List" that best represents the how we should keep on hand,
         // maybe move emit to this struct and we can dealloc from emit ???
         const tokenRefList = try std.ArrayList(*Token).initCapacity(allocator, 30);
+        const tokenQueue = try std.ArrayList(*Token).initCapacity(allocator, 30);
         return .{
             .allocator = allocator,
             .tokenRefList = tokenRefList,
+            .tokenQueue = tokenQueue,
         };
     }
     pub fn deinit(self: *TokenHandler) void {
@@ -89,6 +93,7 @@ pub const TokenHandler = struct {
             self.allocator.destroy(tok);
         }
         self.tokenRefList.deinit(self.allocator);
+        self.tokenQueue.deinit(self.allocator);
     }
     pub fn createDOCTYPEToken(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
@@ -126,9 +131,9 @@ pub const TokenHandler = struct {
         return tok;
     }
 
-    pub fn createComment(self: *TokenHandler, data :u8) !*Token {
+    pub fn createComment(self: *TokenHandler, data: u8) !*Token {
         const tok: *Token = try self.allocator.create(Token);
-        tok.* = .{ .Comment = .{ .data = try std.ArrayList(u8).initCapacity(self.allocator, 32)} };
+        tok.* = .{ .Comment = .{ .data = try std.ArrayList(u8).initCapacity(self.allocator, 32) } };
         try self.tokenRefList.append(self.allocator, tok);
         if (data != 0) try tok.Comment.data.append(self.allocator, data);
         return tok;
@@ -150,6 +155,19 @@ pub const TokenHandler = struct {
         tok.* = .{ .EndOfFile = {} };
         try self.tokenRefList.append(self.allocator, tok);
         return tok;
+    }
+
+    pub fn enqueue(self: *TokenHandler, new: *Token) !void{
+        try self.tokenQueue.append(self.allocator, new);
+    }
+    pub fn dequeue(self: *TokenHandler) !*Token{
+        if (self.tokenQueue.items.len == 0) return tokErrors.NoElementsInQueue;
+        const tok = self.tokenQueue.items[0];
+        _ = self.tokenQueue.orderedRemove(0);
+        return tok;
+    }
+    pub fn getQueueLen(self: *TokenHandler) usize{
+        return self.tokenQueue.items.len; 
     }
 };
 
@@ -205,4 +223,9 @@ pub const AttributeList = struct {
             try data_str.append(self.allocator, data);
         }
     }
+};
+
+const TokenQueue = struct {
+    queue: std.ArrayList(*Token),
+    len: usize,
 };
