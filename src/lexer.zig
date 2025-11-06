@@ -94,24 +94,24 @@ pub const HtmlLexer = struct {
     return_state: LexerStates = .Data,
     current_token: *Token,
     current_input_character: ?u8,
-    tokenHandler: TokenHandler,
+    token_handler: TokenHandler,
     tempBuffer: std.ArrayList(u8),
     verbose: bool = false,
     pub fn init(allocator: std.mem.Allocator, input_stream: InputStream) !HtmlLexer {
-        const tokenHandler = try TokenHandler.init(allocator);
+        const token_handler = try TokenHandler.init(allocator);
         const tempBuffer: std.ArrayList(u8) = try std.ArrayList(u8).initCapacity(allocator, 10);
-        return .{ .stream = input_stream, .allocator = allocator, .current_token = undefined, .current_input_character = undefined, .tokenHandler = tokenHandler, .tempBuffer = tempBuffer };
+        return .{ .stream = input_stream, .allocator = allocator, .current_token = undefined, .current_input_character = undefined, .token_handler = token_handler, .tempBuffer = tempBuffer };
     }
     pub fn deinit(self: *HtmlLexer) void {
-        self.tokenHandler.deinit();
+        self.token_handler.deinit();
         self.tempBuffer.deinit(self.allocator);
     }
 
     pub fn nextToken(self: *HtmlLexer) !*Token {
-        while (self.tokenHandler.getQueueLen() == 0 and self.current_state != .EOF) {
+        while (self.token_handler.getQueueLen() == 0 and self.current_state != .EOF) {
             try self.run();
         }
-        return self.tokenHandler.dequeue();
+        return self.token_handler.dequeue();
     }
 
     pub fn run(self: *HtmlLexer) !void {
@@ -138,21 +138,21 @@ pub const HtmlLexer = struct {
                     // U+0000 NULL
                     if (char == 0) {
                         // unexpected-null-character parse error
-                        self.current_token = try self.tokenHandler.createCharacter(char);
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token = try self.token_handler.createCharacter(char);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
                     // Anything else
                     else {
-                        self.current_token = try self.tokenHandler.createCharacter(char);
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token = try self.token_handler.createCharacter(char);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
                 } else {
                     // EOF
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -175,16 +175,16 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error.
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                     }
                     // Anything else
-                    self.current_token = try self.tokenHandler.createCharacter(char);
-                    try self.tokenHandler.enqueue(self.current_token);
+                    self.current_token = try self.token_handler.createCharacter(char);
+                    try self.token_handler.enqueue(self.current_token);
                     self.current_state = .RCDATA;
                     return;
                 } else {
                     // EOF
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -201,16 +201,16 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error.
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                     }
                     // Anything else
-                    self.current_token = try self.tokenHandler.createCharacter(char);
-                    try self.tokenHandler.enqueue(self.current_token);
+                    self.current_token = try self.token_handler.createCharacter(char);
+                    try self.token_handler.enqueue(self.current_token);
                     self.current_state = .RAWTEXT;
                     return;
                 } else {
                     // EOF
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -227,16 +227,16 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error.
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                     }
                     // Anything else
-                    self.current_token = try self.tokenHandler.createCharacter(char);
-                    try self.tokenHandler.enqueue(self.current_token);
+                    self.current_token = try self.token_handler.createCharacter(char);
+                    try self.token_handler.enqueue(self.current_token);
                     self.current_state = .ScriptData;
                     return;
                 } else {
                     // EOF
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -248,16 +248,16 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error
                         // #TODO: Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                     }
                     // Anything else
-                    self.current_token = try self.tokenHandler.createCharacter(char);
-                    try self.tokenHandler.enqueue(self.current_token);
+                    self.current_token = try self.token_handler.createCharacter(char);
+                    try self.token_handler.enqueue(self.current_token);
                     self.current_state = .PLAINTEXT;
                     return;
                 } else {
                     // EOF
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -278,30 +278,30 @@ pub const HtmlLexer = struct {
                     }
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
-                        self.current_token = try self.tokenHandler.createStartTag();
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, char);
+                        self.current_token = try self.token_handler.createStartTag();
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, char);
                         self.current_state = .TagName;
                         return;
                     }
                     // U+003F QUESTION MARK (?)
                     if (char == '?') {
                         // unexpected-question-mark-instead-of-tag-name parse error
-                        self.current_token = try self.tokenHandler.createComment(0);
+                        self.current_token = try self.token_handler.createComment(0);
                         self.stream.reconsumeChar();
                         self.current_state = .BogusComment;
                         return;
                     }
                     // Anything else
                     // invalid-first-character-of-tag-name parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                     self.stream.reconsumeChar();
                     self.current_state = .Data;
                     return;
                 } else {
                     // EOF
                     // eof-before-tag-name parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -311,8 +311,8 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
-                        self.current_token = try self.tokenHandler.createEndTag();
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, char);
+                        self.current_token = try self.token_handler.createEndTag();
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, char);
                         self.current_state = .TagName;
                         return;
                     }
@@ -324,7 +324,7 @@ pub const HtmlLexer = struct {
                     } else {
                         // Anything else
                         // invalid-first-character-of-tag-name parse error
-                        self.current_token = try self.tokenHandler.createComment(0);
+                        self.current_token = try self.token_handler.createComment(0);
                         self.stream.reconsumeChar();
                         self.current_state = .BogusComment;
                         return;
@@ -332,7 +332,7 @@ pub const HtmlLexer = struct {
                 } else {
                     // EOF
                     // eof-before-tag-name parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -352,13 +352,13 @@ pub const HtmlLexer = struct {
                     }
                     // U+003E GREATER-THAN SIGN (>)
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
                     // ASCII upper alpha
                     if (std.ascii.isAlphabetic(char) and std.ascii.isUpper(char)) {
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, std.ascii.toLower(char));
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, std.ascii.toLower(char));
                         self.current_state = .TagName;
                         return;
                     }
@@ -368,12 +368,12 @@ pub const HtmlLexer = struct {
                         return;
                     } else {
                         // Anything else
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, char);
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, char);
                         self.current_state = .TagName;
                         return;
                     }
                 } else {
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -388,14 +388,14 @@ pub const HtmlLexer = struct {
                         return;
                     } else {
                         // Anything else
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('>'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('>'));
                         self.stream.reconsumeChar();
                         self.current_state = .RCDATA;
                         return;
                     }
                 } else {
                     // EOF is Anything else
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('>'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('>'));
                     self.stream.reconsumeChar();
                     self.current_state = .RCDATA;
                     return;
@@ -406,22 +406,22 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
-                        self.current_token = try self.tokenHandler.createEndTag();
+                        self.current_token = try self.token_handler.createEndTag();
                         self.stream.reconsumeChar();
                         self.current_state = .RCADATAEndTagName;
                         return;
                     } else {
                         // Anything else
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('/'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
                         self.stream.reconsumeChar();
                         self.current_state = .RCDATA;
                         return;
                     }
                 } else {
                     // EOF is Anything else
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('/'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
                     self.stream.reconsumeChar();
                     self.current_state = .RCDATA;
                     return;
@@ -483,7 +483,7 @@ pub const HtmlLexer = struct {
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.stream.reconsumeChar();
                         self.current_state = .RAWTEXT;
                         return;
@@ -497,12 +497,12 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
-                        self.current_token = try self.tokenHandler.createEndTag();
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, std.ascii.toLower(char));
+                        self.current_token = try self.token_handler.createEndTag();
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, std.ascii.toLower(char));
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.stream.reconsumeChar();
                         self.current_state = .RAWTEXT;
                         return;
@@ -510,7 +510,7 @@ pub const HtmlLexer = struct {
                 }
                 // EOF is Anything else
                 else {
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                     self.stream.reconsumeChar();
                     self.current_state = .RAWTEXT;
                     return;
@@ -570,14 +570,14 @@ pub const HtmlLexer = struct {
                     }
                     // U+0021 EXCLAMATION MARK (!)
                     if (char == '!') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('!'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('!'));
                         self.current_state = .ScriptDataEscapeStart;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.stream.reconsumeChar();
                         self.current_state = .ScriptData;
                         return;
@@ -585,7 +585,7 @@ pub const HtmlLexer = struct {
                 }
                 // EOF is Anything else
                 else {
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                     self.stream.reconsumeChar();
                     self.current_state = .ScriptData;
                     return;
@@ -596,23 +596,23 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
-                        self.current_token = try self.tokenHandler.createEndTag();
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, std.ascii.toLower(char));
+                        self.current_token = try self.token_handler.createEndTag();
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, std.ascii.toLower(char));
                         self.current_state = .ScriptDataEndTagName;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('/'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
                         self.current_state = .ScriptData;
                         return;
                     }
                 }
                 // EOF is Anything else
                 else {
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('/'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
                     self.current_state = .ScriptData;
                     return;
                 }
@@ -667,7 +667,7 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('_'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('_'));
                         self.current_state = .ScriptDataEscapeStartDash;
                         return;
                     }
@@ -690,7 +690,7 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('_'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('_'));
                         self.current_state = .ScriptDataEscapedDashDash;
                         return;
                     }
@@ -713,7 +713,7 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('_'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('_'));
                         self.current_state = .ScriptDataEscapeStartDash;
                         return;
                     }
@@ -725,17 +725,17 @@ pub const HtmlLexer = struct {
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error. Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                     }
                 }
                 // EOF
                 else {
                     // This is an eof-in-script-html-comment-like-text parse error.
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                 }
             },
@@ -744,7 +744,7 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('_'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('_'));
                         self.current_state = .ScriptDataEscapedDashDash;
                         return;
                     }
@@ -756,19 +756,19 @@ pub const HtmlLexer = struct {
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error. Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                         self.current_state = .ScriptDataEscapedDash;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                     }
                 }
                 // EOF
                 else {
                     // This is an eof-in-script-html-comment-like-text parse error.
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                 }
             },
@@ -777,7 +777,7 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('-'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('-'));
                         self.current_state = .ScriptDataEscapedDashDash;
                         return;
                     }
@@ -788,7 +788,7 @@ pub const HtmlLexer = struct {
                     }
                     // U+003E GREATER-THAN SIGN (>)
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('>'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('>'));
                         self.current_state = .ScriptData;
                         return;
                     }
@@ -796,14 +796,14 @@ pub const HtmlLexer = struct {
                     if (char == 0) {
                         // unexpected-null-character parse error
                         // Emit a U+FFFD REPLACEMENT CHARACTER character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                         self.current_state = .ScriptDataEscaped;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                         self.current_state = .ScriptDataEscaped;
                         return;
                     }
@@ -811,7 +811,7 @@ pub const HtmlLexer = struct {
                 // EOF
                 else {
                     // eof-in-script-html-comment-like-text parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -828,21 +828,21 @@ pub const HtmlLexer = struct {
                     // ASCII alpha
                     if (std.ascii.isAlphabetic(char)) {
                         self.tempBuffer.clearAndFree(self.allocator);
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.stream.reconsumeChar();
                         self.current_state = .ScriptDataDoubleEscapeStart;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.current_state = .ScriptDataEscaped;
                         return;
                     }
                 }
                 // EOF is Anything else
                 else {
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                     self.current_state = .ScriptDataEscaped;
                     return;
                 }
@@ -851,23 +851,23 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (std.ascii.isAlphabetic(char)) {
-                        self.current_token = try self.tokenHandler.createEndTag();
-                        try self.current_token.Tag.tagName.append(self.tokenHandler.allocator, char);
+                        self.current_token = try self.token_handler.createEndTag();
+                        try self.current_token.Tag.tag_name.append(self.token_handler.allocator, char);
                         self.current_state = .ScriptDataEscapedEndTagName;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createComment('<'));
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createComment('/'));
+                        try self.token_handler.enqueue(try self.token_handler.createComment('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createComment('/'));
                         self.current_state = .ScriptDataEscaped;
                         return;
                     }
                 }
                 // EOF is Anything else
                 else {
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createComment('<'));
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createComment('/'));
+                    try self.token_handler.enqueue(try self.token_handler.createComment('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createComment('/'));
                     self.current_state = .ScriptDataEscaped;
                     return;
                 }
@@ -934,7 +934,7 @@ pub const HtmlLexer = struct {
                         }
                         // Otherwise, switch to the script data escaped state.
                         // Emit the current input character as a character token.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                         self.current_state = .ScriptDataEscaped;
                         return;
                     }
@@ -945,26 +945,26 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('-'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('-'));
                         self.current_state = .ScriptDataDoubleEscapedDash;
                         return;
                     }
                     // U+003C LESS-THAN SIGN (<)
                     if (char == '<') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.current_state = .ScriptDataDoubleEscapedLessThanSign;
                         return;
                     }
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
@@ -972,7 +972,7 @@ pub const HtmlLexer = struct {
                 // EOF
                 else {
                     // This is an eof-in-script-html-comment-like-text parse error.
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -982,26 +982,26 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('-'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('-'));
                         self.current_state = .ScriptDataDoubleEscapedDashDash;
                         return;
                     }
                     // U+003C LESS-THAN SIGN (<)
                     if (char == '<') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.current_state = .ScriptDataDoubleEscapedLessThanSign;
                         return;
                     }
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
@@ -1009,7 +1009,7 @@ pub const HtmlLexer = struct {
                 // EOF
                 else {
                     // This is an eof-in-script-html-comment-like-text parse error.
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1019,33 +1019,33 @@ pub const HtmlLexer = struct {
                 if (self.current_input_character) |char| {
                     // U+002D HYPHEN-MINUS (-)
                     if (char == '-') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('-'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('-'));
                         self.current_state = .ScriptDataDoubleEscapedDashDash;
                         return;
                     }
                     // U+003C LESS-THAN SIGN (<)
                     if (char == '<') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
                         self.current_state = .ScriptDataDoubleEscapedLessThanSign;
                         return;
                     }
                     // U+003E GREATER-THAN SIGN (>)
                     // Switch to the script data state. Emit a U+003E GREATER-THAN SIGN character token.
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('>'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('>'));
                         self.current_state = .ScriptData;
                         return;
                     }
                     // U+0000 NULL
                     if (char == 0) {
                         // This is an unexpected-null-character parse error.
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createReplacement());
+                        try self.token_handler.enqueue(try self.token_handler.createReplacement());
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
                     // Anything else
                     else {
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
@@ -1053,7 +1053,7 @@ pub const HtmlLexer = struct {
                 // EOF
                 else {
                     // This is an eof-in-script-html-comment-like-text parse error.
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1064,7 +1064,7 @@ pub const HtmlLexer = struct {
                     // U+002F SOLIDUS (/)
                     if (char == '/') {
                         self.tempBuffer.clearAndFree(self.allocator);
-                        try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter('/'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
                         self.current_state = .ScriptDataDoubleEscaped;
                         return;
                     }
@@ -1090,7 +1090,7 @@ pub const HtmlLexer = struct {
                             self.current_state = .ScriptDataEscaped;
                             return;
                         } else {
-                            try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                            try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                             self.current_state = .ScriptDataDoubleEscaped;
                             return;
                         }
@@ -1098,14 +1098,14 @@ pub const HtmlLexer = struct {
                     if (std.ascii.isAlphabetic(char)) {
                         // ASCII upper alpha
                         if (std.ascii.isUpper(char)) {
-                            try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(std.ascii.toLower(char)));
+                            try self.token_handler.enqueue(try self.token_handler.createCharacter(std.ascii.toLower(char)));
                             self.current_state = .ScriptDataDoubleEscaped;
                             return;
                         }
                         // ASCII lower alpha
                         if (std.ascii.isLower(char)) {
                             // Append the current input character to the temporary buffer. Emit the current input character as a character token.
-                            try self.tokenHandler.enqueue(try self.tokenHandler.createCharacter(char));
+                            try self.token_handler.enqueue(try self.token_handler.createCharacter(char));
                         }
                         // Anything else
                         else {
@@ -1209,7 +1209,7 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
@@ -1219,7 +1219,7 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-tag parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1241,7 +1241,7 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // missing-attribute-value parse error
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
@@ -1280,7 +1280,7 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-tag parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1309,7 +1309,7 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-tag parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1327,7 +1327,7 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
@@ -1350,7 +1350,7 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-tag parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1367,7 +1367,7 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
@@ -1378,7 +1378,7 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-tag parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1387,8 +1387,8 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '>') {
-                        self.current_token.Tag.selfClosing = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.Tag.self_closing = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
@@ -1399,7 +1399,7 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-tag parse error
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1408,8 +1408,8 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '>') {
-                        self.current_token.Tag.selfClosing = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.Tag.self_closing = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
@@ -1418,11 +1418,11 @@ pub const HtmlLexer = struct {
                         self.current_state = .BogusComment;
                         return;
                     } else {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, char);
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, char);
                     }
                 } else {
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                 }
             },
@@ -1433,11 +1433,11 @@ pub const HtmlLexer = struct {
                     return;
                 }
                 if (self.stream.consumeString("--")) {
-                    self.current_token = try self.tokenHandler.createComment(0);
+                    self.current_token = try self.token_handler.createComment(0);
                     self.current_state = .CommentStart;
                     return;
                 } else {
-                    self.current_token = try self.tokenHandler.createComment(0);
+                    self.current_token = try self.token_handler.createComment(0);
                     self.current_state = .BogusComment;
                     return;
                 }
@@ -1451,7 +1451,7 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // abrupt-closing-of-empty-comment parse error
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
@@ -1474,19 +1474,19 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // abrupt-closing-of-empty-comment parse error
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
                         self.stream.reconsumeChar();
                         self.current_state = .Comment;
                         return;
                     }
                 } else {
                     // eof-in-comment parse error
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1496,7 +1496,7 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '<') {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, char);
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, char);
                         self.current_state = .CommentLessThanSign;
                         return;
                     }
@@ -1511,8 +1511,8 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-comment parse error
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1521,12 +1521,12 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '!') {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, char);
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, char);
                         self.current_state = .CommentLessThanSignBang;
                         return;
                     }
                     if (char == '<') {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, char);
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, char);
                         self.current_state = .CommentLessThanSign;
                         return;
                     } else {
@@ -1600,15 +1600,15 @@ pub const HtmlLexer = struct {
                         self.current_state = .CommentEnd;
                         return;
                     } else {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
                         self.stream.reconsumeChar();
                         self.current_state = .Comment;
                         return;
                     }
                 } else {
                     // eof-in-comment parse error
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1617,7 +1617,7 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
@@ -1626,19 +1626,19 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '-') {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
                         self.current_state = .CommentEnd;
                         return;
                     } else {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
                         self.current_state = .Comment;
                         return;
                     }
                 } else {
                     // eof-in-comment parse error
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1647,28 +1647,28 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '-') {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '!');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '!');
                         self.current_state = .CommentEndDash;
                         return;
                     }
                     if (char == '>') {
                         // incorrectly-closed-comment parse error
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '-');
-                        try self.current_token.Comment.data.append(self.tokenHandler.allocator, '!');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '-');
+                        try self.current_token.Comment.data.append(self.token_handler.allocator, '!');
                         self.current_state = .Comment;
                         return;
                     }
                 } else {
                     // eof-in-comment parse error
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1694,9 +1694,9 @@ pub const HtmlLexer = struct {
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token = try self.tokenHandler.createDOCTYPEToken();
-                    self.current_token.DOCTYPE.forceQuirks = false;
-                    try self.tokenHandler.enqueue(self.current_token);
+                    self.current_token = try self.token_handler.createDOCTYPEToken();
+                    self.current_token.DOCTYPE.force_quirks = false;
+                    try self.token_handler.enqueue(self.current_token);
                 }
             },
             .BeforeDOCTYPEName => {
@@ -1707,36 +1707,36 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (std.ascii.isAlphabetic(char) and std.ascii.isUpper(char)) {
-                        self.current_token = try self.tokenHandler.createDOCTYPEToken();
-                        try self.current_token.DOCTYPE.name.append(self.tokenHandler.allocator, std.ascii.toLower(char));
+                        self.current_token = try self.token_handler.createDOCTYPEToken();
+                        try self.current_token.DOCTYPE.name.append(self.token_handler.allocator, std.ascii.toLower(char));
                         self.current_state = .DOCTYPEName;
                         return;
                     }
                     if (char == 0) {
                         // unexpected-null-character parse error
-                        self.current_token = try self.tokenHandler.createDOCTYPEToken();
+                        self.current_token = try self.token_handler.createDOCTYPEToken();
                         // Set the token's name to a U+FFFD REPLACEMENT CHARACTER character
                         self.current_state = .DOCTYPEName;
                         return;
                     }
                     if (char == '>') {
-                        self.current_token = try self.tokenHandler.createDOCTYPEToken();
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token = try self.token_handler.createDOCTYPEToken();
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        self.current_token = try self.tokenHandler.createDOCTYPEToken();
-                        try self.current_token.DOCTYPE.name.append(self.tokenHandler.allocator, char);
+                        self.current_token = try self.token_handler.createDOCTYPEToken();
+                        try self.current_token.DOCTYPE.name.append(self.token_handler.allocator, char);
                         self.current_state = .DOCTYPEName;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token = try self.tokenHandler.createDOCTYPEToken();
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token = try self.token_handler.createDOCTYPEToken();
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1750,13 +1750,13 @@ pub const HtmlLexer = struct {
                     }
                     // U+003E GREATER-THAN SIGN (>)
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
                     // ASCII upper alpha
                     if (std.ascii.isAlphabetic(char) and std.ascii.isUpper(char)) {
-                        try self.current_token.DOCTYPE.name.append(self.tokenHandler.allocator, std.ascii.toLower(char));
+                        try self.current_token.DOCTYPE.name.append(self.token_handler.allocator, std.ascii.toLower(char));
                         self.current_state = .DOCTYPEName;
                         return;
                     }
@@ -1768,7 +1768,7 @@ pub const HtmlLexer = struct {
                     }
                     // Anything else
                     else {
-                        try self.current_token.DOCTYPE.name.append(self.tokenHandler.allocator, char);
+                        try self.current_token.DOCTYPE.name.append(self.token_handler.allocator, char);
                         self.current_state = .DOCTYPEName;
                         return;
                     }
@@ -1776,8 +1776,8 @@ pub const HtmlLexer = struct {
                 // EOF
                 else {
                     //eof-in-doctype parse error
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1790,7 +1790,7 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
@@ -1806,15 +1806,15 @@ pub const HtmlLexer = struct {
                     } else {
                         // invalid-character-sequence-after-doctype-name parse error
                         self.stream.case_sensitive = true;
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1827,33 +1827,33 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '"') {
-                        self.current_token.DOCTYPE.publicIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.public_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPEPublicIdentifierDoubleQuoted;
                         return;
                     }
                     if (char == '\'') {
-                        self.current_token.DOCTYPE.publicIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.public_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPEPublicIdentifierSingleQuoted;
                         return;
                     }
                     if (char == '>') {
                         // missing-doctype-public-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
                         // missing-quote-before-doctype-public-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1866,33 +1866,33 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '"') {
-                        self.current_token.DOCTYPE.publicIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.public_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPEPublicIdentifierDoubleQuoted;
                         return;
                     }
                     if (char == '\'') {
-                        self.current_token.DOCTYPE.publicIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.public_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPEPublicIdentifierSingleQuoted;
                         return;
                     }
                     if (char == '>') {
                         // missing-doctype-public-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
                         // missing-quote-before-doctype-public-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1911,20 +1911,20 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // abrupt-doctype-public-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        try self.current_token.DOCTYPE.publicIdent.append(self.tokenHandler.allocator, char);
+                        try self.current_token.DOCTYPE.public_ident.append(self.token_handler.allocator, char);
                         self.current_state = .DOCTYPEPublicIdentifierDoubleQuoted;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1943,18 +1943,18 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // abrupt-doctype-public-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        try self.current_token.DOCTYPE.publicIdent.append(self.tokenHandler.allocator, char);
+                        try self.current_token.DOCTYPE.public_ident.append(self.token_handler.allocator, char);
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -1967,33 +1967,33 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
                     if (char == '"') {
                         // missing-whitespace-between-doctype-public-and-system-identifiers parse error
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierDoubleQuoted;
                         return;
                     }
                     if (char == '\'') {
                         // missing-whitespace-between-doctype-public-and-system-identifiers parse error
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierSingleQuoted;
                         return;
                     } else {
                         // missing-quote-before-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2006,31 +2006,31 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
                     if (char == '"') {
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierDoubleQuoted;
                         return;
                     }
                     if (char == '\'') {
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierSingleQuoted;
                         return;
                     } else {
                         // missing-quote-before-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2044,34 +2044,34 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '"') {
                         // missing-whitespace-after-doctype-system-keyword parse error
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierDoubleQuoted;
                         return;
                     }
                     if (char == '\'') {
                         // missing-whitespace-after-doctype-system-keyword parse error
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPEPublicIdentifierSingleQuoted;
                         return;
                     }
                     if (char == '>') {
                         // missing-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
                         // missing-quote-before-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2084,33 +2084,33 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '"') {
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierDoubleQuoted;
                         return;
                     }
                     if (char == '\'') {
-                        self.current_token.DOCTYPE.systemIdent.clearAndFree(self.tokenHandler.allocator);
+                        self.current_token.DOCTYPE.system_ident.clearAndFree(self.token_handler.allocator);
                         self.current_state = .DOCTYPESystemIdentifierSingleQuoted;
                         return;
                     }
                     if (char == '>') {
                         // missing-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
                         // missing-quote-before-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
+                        self.current_token.DOCTYPE.force_quirks = true;
                         self.stream.reconsumeChar();
                         self.current_state = .BogusDOCTYPE;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2128,20 +2128,20 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // abrupt-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        try self.current_token.DOCTYPE.systemIdent.append(self.tokenHandler.allocator, char);
+                        try self.current_token.DOCTYPE.system_ident.append(self.token_handler.allocator, char);
                         self.current_state = .DOCTYPESystemIdentifierDoubleQuoted;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2159,20 +2159,20 @@ pub const HtmlLexer = struct {
                     }
                     if (char == '>') {
                         // abrupt-doctype-system-identifier parse error
-                        self.current_token.DOCTYPE.forceQuirks = true;
-                        try self.tokenHandler.enqueue(self.current_token);
+                        self.current_token.DOCTYPE.force_quirks = true;
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
-                        try self.current_token.DOCTYPE.systemIdent.append(self.tokenHandler.allocator, char);
+                        try self.current_token.DOCTYPE.system_ident.append(self.token_handler.allocator, char);
                         self.current_state = .DOCTYPEPublicIdentifierSingleQuoted;
                         return;
                     }
                 } else {
                     // eof-in-doctype parse error
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2185,7 +2185,7 @@ pub const HtmlLexer = struct {
                         return;
                     }
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     } else {
@@ -2195,9 +2195,9 @@ pub const HtmlLexer = struct {
                         return;
                     }
                 } else {
-                    self.current_token.DOCTYPE.forceQuirks = true;
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    self.current_token.DOCTYPE.force_quirks = true;
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }
@@ -2206,7 +2206,7 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     if (char == '>') {
-                        try self.tokenHandler.enqueue(self.current_token);
+                        try self.token_handler.enqueue(self.current_token);
                         self.current_state = .Data;
                         return;
                     }
@@ -2219,8 +2219,8 @@ pub const HtmlLexer = struct {
                         return;
                     }
                 } else {
-                    try self.tokenHandler.enqueue(self.current_token);
-                    try self.tokenHandler.enqueue(try self.tokenHandler.createEOF());
+                    try self.token_handler.enqueue(self.current_token);
+                    try self.token_handler.enqueue(try self.token_handler.createEOF());
                     self.current_state = .EOF;
                     return;
                 }

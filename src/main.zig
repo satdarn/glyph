@@ -8,10 +8,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    const stream = InputStream.init("<!DOCTYPE html> \n <html> <p> </p>\n </html> \n");
-    var lexer = try HtmlLexer.init(allocator, stream);
-    defer lexer.deinit();
-    var parser = try HtmlParser.init(allocator, lexer);
+    var parser = try HtmlParser.init(allocator);
     defer parser.deinit();
-    const tree = parser.getTree();
+    try parser.getTree();
 }

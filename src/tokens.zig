@@ -9,14 +9,14 @@ const tokErrors = error{
 pub const Token = union(enum) {
     DOCTYPE: struct {
         name: std.ArrayList(u8),
-        publicIdent: std.ArrayList(u8),
-        systemIdent: std.ArrayList(u8),
-        forceQuirks: bool,
+        public_ident: std.ArrayList(u8),
+        system_ident: std.ArrayList(u8),
+        force_quirks: bool,
     },
     Tag: struct {
         type: enum { StartTag, EndTag },
-        tagName: std.ArrayList(u8),
-        selfClosing: bool,
+        tag_name: std.ArrayList(u8),
+        self_closing: bool,
         attributes: AttributeList,
     },
     Comment: struct {
@@ -27,24 +27,24 @@ pub const Token = union(enum) {
     },
     ReplacementCharacter: void, // REPLACEMENT CHARACTER character token U+FFFD
     EndOfFile: void,
-    pub fn emitToken(token: *Token) void {
+    pub fn printToken(token: *Token) void {
         switch (token.*) {
             .DOCTYPE => |tok| {
                 std.debug.print("DOCTYPE TKN\n", .{});
                 std.debug.print("   name:{s}\n", .{tok.name.items});
-                std.debug.print("   publicIdent : {s}\n", .{tok.publicIdent.items});
-                std.debug.print("   systemIdent : {s}\n", .{tok.systemIdent.items});
-                std.debug.print("   forceQuirks : {}\n", .{tok.forceQuirks});
+                std.debug.print("   public_ident : {s}\n", .{tok.public_ident.items});
+                std.debug.print("   system_ident : {s}\n", .{tok.system_ident.items});
+                std.debug.print("   force_quirks : {}\n", .{tok.force_quirks});
             },
             .Tag => |tok| {
                 if (tok.type == .StartTag) {
                     std.debug.print("StartTag TKN\n", .{});
-                    std.debug.print("   tagName : {s}\n", .{tok.tagName.items});
-                    std.debug.print("   selfClosing : {}\n", .{tok.selfClosing});
+                    std.debug.print("   tag_name : {s}\n", .{tok.tag_name.items});
+                    std.debug.print("   self_closing : {}\n", .{tok.self_closing});
                 } else {
                     std.debug.print("EndTag TKN\n", .{});
-                    std.debug.print("   tagName : {s}\n", .{tok.tagName.items});
-                    std.debug.print("   selfClosing : {}\n", .{tok.selfClosing});
+                    std.debug.print("   tag_name : {s}\n", .{tok.tag_name.items});
+                    std.debug.print("   self_closing : {}\n", .{tok.self_closing});
                 }
             },
             .Comment => |tok| {
@@ -63,112 +63,112 @@ pub const Token = union(enum) {
 
 pub const TokenHandler = struct {
     allocator: std.mem.Allocator,
-    tokenRefList: std.ArrayList(*Token),
-    tokenQueue: std.ArrayList(*Token),
+    token_ref_list: std.ArrayList(*Token),
+    token_queue: std.ArrayList(*Token),
     pub fn init(allocator: std.mem.Allocator) !TokenHandler {
         // #TODO: optimize the size of the "Token List" that best represents the how we should keep on hand,
         // maybe move emit to this struct and we can dealloc from emit ???
-        const tokenRefList = try std.ArrayList(*Token).initCapacity(allocator, 30);
-        const tokenQueue = try std.ArrayList(*Token).initCapacity(allocator, 30);
+        const token_ref_list = try std.ArrayList(*Token).initCapacity(allocator, 30);
+        const token_queue = try std.ArrayList(*Token).initCapacity(allocator, 30);
         return .{
             .allocator = allocator,
-            .tokenRefList = tokenRefList,
-            .tokenQueue = tokenQueue,
+            .token_ref_list = token_ref_list,
+            .token_queue = token_queue,
         };
     }
     pub fn deinit(self: *TokenHandler) void {
-        for (self.tokenRefList.items) |tok| {
+        for (self.token_ref_list.items) |tok| {
             if (tok.* == .Tag) {
-                tok.Tag.tagName.deinit(self.allocator);
+                tok.Tag.tag_name.deinit(self.allocator);
                 tok.Tag.attributes.deinit();
             }
             if (tok.* == .DOCTYPE) {
                 tok.DOCTYPE.name.deinit(self.allocator);
-                tok.DOCTYPE.publicIdent.deinit(self.allocator);
-                tok.DOCTYPE.systemIdent.deinit(self.allocator);
+                tok.DOCTYPE.public_ident.deinit(self.allocator);
+                tok.DOCTYPE.system_ident.deinit(self.allocator);
             }
             if (tok.* == .Comment) {
                 tok.Comment.data.deinit(self.allocator);
             }
             self.allocator.destroy(tok);
         }
-        self.tokenRefList.deinit(self.allocator);
-        self.tokenQueue.deinit(self.allocator);
+        self.token_ref_list.deinit(self.allocator);
+        self.token_queue.deinit(self.allocator);
     }
     pub fn createDOCTYPEToken(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
-        const nameList = try std.ArrayList(u8).initCapacity(self.allocator, 1);
-        const publicIdentList = try std.ArrayList(u8).initCapacity(self.allocator, 1);
-        const systemIdentList = try std.ArrayList(u8).initCapacity(self.allocator, 1);
+        const name = try std.ArrayList(u8).initCapacity(self.allocator, 1);
+        const public_ident = try std.ArrayList(u8).initCapacity(self.allocator, 1);
+        const system_ident = try std.ArrayList(u8).initCapacity(self.allocator, 1);
 
-        tok.* = .{ .DOCTYPE = .{ .name = nameList, .publicIdent = publicIdentList, .systemIdent = systemIdentList, .forceQuirks = false } };
-        try self.tokenRefList.append(self.allocator, tok);
+        tok.* = .{ .DOCTYPE = .{ .name = name, .public_ident = public_ident, .system_ident = system_ident, .force_quirks = false } };
+        try self.token_ref_list.append(self.allocator, tok);
         return tok;
     }
     pub fn createStartTag(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
-        const tagName = try std.ArrayList(u8).initCapacity(self.allocator, 1);
+        const tag_name = try std.ArrayList(u8).initCapacity(self.allocator, 1);
         tok.* = .{ .Tag = .{
             .type = .StartTag,
-            .tagName = tagName,
-            .selfClosing = false,
+            .tag_name = tag_name,
+            .self_closing = false,
             .attributes = try AttributeList.init(self.allocator),
         } };
-        try self.tokenRefList.append(self.allocator, tok);
+        try self.token_ref_list.append(self.allocator, tok);
         return tok;
     }
 
     pub fn createEndTag(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
-        const tagName = try std.ArrayList(u8).initCapacity(self.allocator, 1);
+        const tag_name = try std.ArrayList(u8).initCapacity(self.allocator, 1);
         tok.* = .{ .Tag = .{
             .type = .EndTag,
-            .tagName = tagName,
-            .selfClosing = false,
+            .tag_name = tag_name,
+            .self_closing = false,
             .attributes = try AttributeList.init(self.allocator),
         } };
-        try self.tokenRefList.append(self.allocator, tok);
+        try self.token_ref_list.append(self.allocator, tok);
         return tok;
     }
 
     pub fn createComment(self: *TokenHandler, data: u8) !*Token {
         const tok: *Token = try self.allocator.create(Token);
         tok.* = .{ .Comment = .{ .data = try std.ArrayList(u8).initCapacity(self.allocator, 32) } };
-        try self.tokenRefList.append(self.allocator, tok);
+        try self.token_ref_list.append(self.allocator, tok);
         if (data != 0) try tok.Comment.data.append(self.allocator, data);
         return tok;
     }
     pub fn createCharacter(self: *TokenHandler, data: u8) !*Token {
         const tok: *Token = try self.allocator.create(Token);
         tok.* = .{ .Character = .{ .data = &[1]u8{data} } };
-        try self.tokenRefList.append(self.allocator, tok);
+        try self.token_ref_list.append(self.allocator, tok);
         return tok;
     }
     pub fn createReplacement(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
         tok.* = .{ .ReplacementCharacter = {} };
-        try self.tokenRefList.append(self.allocator, tok);
+        try self.token_ref_list.append(self.allocator, tok);
         return tok;
     }
     pub fn createEOF(self: *TokenHandler) !*Token {
         const tok: *Token = try self.allocator.create(Token);
         tok.* = .{ .EndOfFile = {} };
-        try self.tokenRefList.append(self.allocator, tok);
+        try self.token_ref_list.append(self.allocator, tok);
         return tok;
     }
 
     pub fn enqueue(self: *TokenHandler, new: *Token) !void {
-        try self.tokenQueue.append(self.allocator, new);
+        try self.token_queue.append(self.allocator, new);
     }
     pub fn dequeue(self: *TokenHandler) !*Token {
-        if (self.tokenQueue.items.len == 0) return tokErrors.NoElementsInQueue;
-        const tok = self.tokenQueue.items[0];
+        if (self.token_queue.items.len == 0) return tokErrors.NoElementsInQueue;
+        const tok = self.token_queue.items[0];
         if (tok.* == .EndOfFile) return tok; // this make sure that the there is always a EOF once lexing is complete
-        _ = self.tokenQueue.orderedRemove(0);
+        _ = self.token_queue.orderedRemove(0);
         return tok;
     }
     pub fn getQueueLen(self: *TokenHandler) usize {
-        return self.tokenQueue.items.len;
+        return self.token_queue.items.len;
     }
 };
 

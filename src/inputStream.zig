@@ -31,16 +31,16 @@ pub const InputStream = struct {
     }
 
     pub fn nextCharsAre(stream: *InputStream, string: []const u8) bool {
-        const streamString = stream.data[stream.pos .. stream.pos + string.len];
+        const stream_string = stream.data[stream.pos .. stream.pos + string.len];
         if (!stream.case_sensitive) {
-            for (streamString, 0..) |streamChar, i| {
+            for (stream_string, 0..) |streamChar, i| {
                 if (std.ascii.toLower(streamChar) != std.ascii.toLower(string[i])) {
                     return false;
                 }
             }
             return true;
         }
-        return std.mem.eql(u8, streamString, string);
+        return std.mem.eql(u8, stream_string, string);
     }
 
     pub fn consumeString(stream: *InputStream, string: []const u8) bool {

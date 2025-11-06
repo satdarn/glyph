@@ -1,7 +1,7 @@
 const std = @import("std");
 const HtmlLexer = @import("lexer.zig").HtmlLexer;
-const Tokens = @import("tokens.zig").Tokens;
-const Nodes = @import("nodes.zig").Nodes;
+const Token = @import("tokens.zig").Token;
+const Node = @import("nodes.zig").Node;
 const InputStream = @import("inputStream.zig").InputStream;
 
 pub const HtmlParser = struct {
@@ -14,5 +14,8 @@ pub const HtmlParser = struct {
     }
     pub fn deinit(self: *HtmlParser) void {
         self.lexer.deinit();
+    }
+    pub fn getTree(self: *HtmlParser) !void{
+        _ = try self.lexer.nextToken(); 
     }
 };
