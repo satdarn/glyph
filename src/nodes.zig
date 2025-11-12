@@ -30,7 +30,7 @@ pub const Node = struct {
         const node = try allocator.create(Node);
         node.* = .{
             .parent = null,
-            .children = std.ArrayList(*Node).init(allocator),
+            .children = try std.ArrayList(*Node).initCapacity(allocator, 5),
             .allocator = allocator,
             .data = .{ .Document = {} },
         };
@@ -41,7 +41,7 @@ pub const Node = struct {
         const node = try allocator.create(Node);
         const name_copy = try allocator.dupe(tag_name);
 
-        node.* = .{ .parent = null, .children = std.ArrayList(*Node).init(allocator), .allocator = allocator, .data = .{ .Element = .{
+        node.* = .{ .parent = null, .children = try std.ArrayList(*Node).initCapacity(allocator, 5), .allocator = allocator, .data = .{ .Element = .{
             .tag_name = name_copy,
             .attributes = std.StringHashMap([]const u8).init(allocator),
             .self_closing = false,
@@ -54,7 +54,7 @@ pub const Node = struct {
 
         node.* = .{
             .parent = null,
-            .children = std.ArrayList(*Node).init(allocator),
+            .children = try std.ArrayList(*Node).initCapacity(allocator, 5),
             .allocator = allocator,
             .data = .{ .Text = .{ .content = text_copy } },
         };
@@ -67,7 +67,7 @@ pub const Node = struct {
 
         node.* = .{
             .parent = null,
-            .children = std.ArrayList(*Node).init(allocator),
+            .children = try std.ArrayList(*Node).initCapacity(allocator, 5),
             .allocator = allocator,
             .data = .{ .Comment = .{ .content = text_copy } },
         };
@@ -83,7 +83,7 @@ pub const Node = struct {
 
         node.* = .{
             .parent = null,
-            .children = std.ArrayList(*Node).init(allocator),
+            .children = try std.ArrayList(*Node).initCapacity(allocator, 5),
             .allocator = allocator,
             .data = .{
                 .DOCTYPE = .{
@@ -95,5 +95,31 @@ pub const Node = struct {
             },
         };
         return node;
+    }
+    pub fn deinit(self: *Node) void {
+        const allocator: std.mem.Allocator = self.allocator;
+        for (self.children.items) |child| {
+            child.deinit();
+        }
+        self.children.deinit(allocator);
+        switch (self.data) {
+            .Document => {},
+            .Element => {
+                allocator.free(self.data.Element.tag_name);
+                self.data.Element.attributes.deinit();
+            },
+            .Text => {
+                allocator.free(self.data.Text.content);
+            },
+            .Comment => {
+                allocator.free(self.data.Comment.content);
+            },
+            .DOCTYPE => {
+                allocator.free(self.data.DOCTYPE.name);
+                if (self.data.DOCTYPE.system_id) |sys_id| allocator.free(sys_id);
+                if (self.data.DOCTYPE.public_id) |pub_id| allocator.free(pub_id);
+            },
+        }
+        allocator.destroy(self);
     }
 };
