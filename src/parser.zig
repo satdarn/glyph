@@ -4,6 +4,30 @@ const Token = @import("tokens.zig").Token;
 const Node = @import("nodes.zig").Node;
 const InputStream = @import("inputStream.zig").InputStream;
 
+const InsertionMode = enum {
+    Initial,
+    BeforeHtml,
+    BeforeHead,
+    InHead,
+    InHeadNoscript,
+    AfterHead,
+    InBody,
+    Text,
+    InTable,
+    InTableText,
+    InCaption,
+    InColumnGroup,
+    InTableBody,
+    InRow,
+    InCell,
+    InTemplate,
+    AfterBody,
+    InFrameset,
+    AfterFrameset,
+    AfterAfterBody,
+    AfterAfterFrameset,
+};
+
 pub const HtmlParser = struct {
     lexer: HtmlLexer,
     allocator: std.mem.Allocator,
@@ -15,7 +39,33 @@ pub const HtmlParser = struct {
     pub fn deinit(self: *HtmlParser) void {
         self.lexer.deinit();
     }
-    pub fn getTree(self: *HtmlParser) !void{
-        _ = try self.lexer.nextToken(); 
+    pub fn getTree(self: *HtmlParser) !void {
+        const insertion_mode: InsertionMode = .Initial;
+        const token: *Token = try self.lexer.nextToken();
+        // const document: *Node = try Node.createDocument(self.allocator); 
+        switch (insertion_mode) {
+            .Initial => {
+            },
+            .BeforeHtml => {},
+            .BeforeHead => {},
+            .InHead => {},
+            .InHeadNoscript => {},
+            .AfterHead => {},
+            .InBody => {},
+            .Text => {},
+            .InTable => {},
+            .InTableText => {},
+            .InCaption => {},
+            .InColumnGroup => {},
+            .InTableBody => {},
+            .InRow => {},
+            .InCell => {},
+            .InTemplate => {},
+            .AfterBody => {},
+            .InFrameset => {},
+            .AfterFrameset => {},
+            .AfterAfterBody => {},
+            .AfterAfterFrameset => {},
+        }
     }
 };

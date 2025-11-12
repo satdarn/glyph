@@ -1,5 +1,4 @@
 const std = @import("std");
-
 pub const Node = struct {
     parent: ?*Node,
     children: std.ArrayList(*Node),
