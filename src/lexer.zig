@@ -111,6 +111,10 @@ pub const HtmlLexer = struct {
         while (self.token_handler.getQueueLen() == 0 and self.current_state != .EOF) {
             try self.run();
         }
+        if (self.verbose) {
+            std.debug.print("Lexer emits a {s} token\n", .{@tagName(self.token_handler.token_queue.items[0].*)});
+            self.token_handler.token_queue.items[0].printToken();
+        }
         return self.token_handler.dequeue();
     }
 
