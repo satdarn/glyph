@@ -40,11 +40,18 @@ pub const HtmlParser = struct {
         self.lexer.deinit();
     }
     pub fn getTree(self: *HtmlParser) !void {
+        self.lexer.verbose = true;
         const insertion_mode: InsertionMode = .Initial;
         const token: *Token = try self.lexer.nextToken();
-        // const document: *Node = try Node.createDocument(self.allocator); 
+        const document: *Node = try Node.createDocument(self.allocator);
+        defer document.deinit();
         switch (insertion_mode) {
             .Initial => {
+                if (token.* == Token.Comment) {
+                    try document.children.append(self.allocator, try Node.createComment(self.allocator, token.Comment.data.items));           
+                }
+
+
             },
             .BeforeHtml => {},
             .BeforeHead => {},
