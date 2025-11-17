@@ -39,7 +39,7 @@ pub const Node = struct {
 
     pub fn createElement(allocator: std.mem.Allocator, tag_name: []const u8) !*Node {
         const node = try allocator.create(Node);
-        const name_copy = try allocator.dupe(tag_name);
+        const name_copy = try allocator.dupe(u8, tag_name);
 
         node.* = .{ .parent = null, .children = try std.ArrayList(*Node).initCapacity(allocator, 5), .allocator = allocator, .data = .{ .Element = .{
             .tag_name = name_copy,
@@ -121,5 +121,61 @@ pub const Node = struct {
             },
         }
         allocator.destroy(self);
+    }
+    pub fn printTreeSimple(node: *Node) void {
+        printTreeSimpleRecursive(node, 0);
+    }
+
+    fn printTreeSimpleRecursive(node: *Node, depth: usize) void {
+        // Print indentation
+        var i: usize = 0;
+        while (i < depth) : (i += 1) {
+            std.debug.print("  ", .{});
+        }
+
+        // Print node content
+        switch (node.data) {
+            .Document => {
+                std.debug.print("Document\n", .{});
+            },
+            .Element => |element| {
+                if (element.self_closing) {
+                    std.debug.print("<{s}/>", .{element.tag_name});
+                } else {
+                    std.debug.print("<{s}>", .{element.tag_name});
+                }
+
+                // Print attributes
+                var attr_iter = element.attributes.iterator();
+                while (attr_iter.next()) |entry| {
+                    std.debug.print(" {s}=\"{s}\"", .{ entry.key_ptr.*, entry.value_ptr.* });
+                }
+                std.debug.print("\n", .{});
+            },
+            .Text => |text| {
+                std.debug.print("\"{s}\"\n", .{text.content});
+            },
+            .Comment => |comment| {
+                std.debug.print("<!-- {s} -->\n", .{comment.content});
+            },
+            .DOCTYPE => |doctype| {
+                std.debug.print("<!DOCTYPE {s}", .{doctype.name});
+                if (doctype.public_id) |pub_id| {
+                    std.debug.print(" PUBLIC \"{s}\"", .{pub_id});
+                }
+                if (doctype.system_id) |sys_id| {
+                    if (doctype.public_id == null) {
+                        std.debug.print(" SYSTEM", .{});
+                    }
+                    std.debug.print(" \"{s}\"", .{sys_id});
+                }
+                std.debug.print(">\n", .{});
+            },
+        }
+
+        // Print children
+        for (node.children.items) |child| {
+            printTreeSimpleRecursive(child, depth + 1);
+        }
     }
 };
