@@ -13,7 +13,7 @@ pub const Node = struct {
             self_closing: bool,
         },
         Text: struct {
-            content: []const u8,
+            content: std.ArrayList(u8),
         },
         Comment: struct {
             content: []const u8,
@@ -50,13 +50,11 @@ pub const Node = struct {
     }
     pub fn createText(allocator: std.mem.Allocator, text: []const u8) !*Node {
         const node = try allocator.create(Node);
-        const text_copy = try allocator.dupe(u8, text);
-
         node.* = .{
             .parent = null,
             .children = try std.ArrayList(*Node).initCapacity(allocator, 5),
             .allocator = allocator,
-            .data = .{ .Text = .{ .content = text_copy } },
+            .data = .{ .Text = .{ .content = try std.ArrayList(u8).initCapacity(allocator, 10).appendSlice(allocator, text) } },
         };
         return node;
     }
@@ -109,7 +107,7 @@ pub const Node = struct {
                 self.data.Element.attributes.deinit();
             },
             .Text => {
-                allocator.free(self.data.Text.content);
+                self.data.Text.content.deinit(self.allocator);
             },
             .Comment => {
                 allocator.free(self.data.Comment.content);
@@ -153,7 +151,7 @@ pub const Node = struct {
                 std.debug.print("\n", .{});
             },
             .Text => |text| {
-                std.debug.print("\"{s}\"\n", .{text.content});
+                std.debug.print("\"{s}\"\n", .{text.content.items});
             },
             .Comment => |comment| {
                 std.debug.print("<!-- {s} -->\n", .{comment.content});
