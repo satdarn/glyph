@@ -118,14 +118,43 @@ pub const HtmlParser = struct {
         }
         self.document.printTreeSimple();
     }
-    fn getAppropriatePlace(self: *HtmlParser) *Node {
-        const target: *Node = self.open_elements.getLast();
+    fn nextToken(self: *HtmlParser) void {
+        self.current_token = self.lexer.nextToken() catch return;
+    }
+    
+    fn getAppropriatePlace(self: *HtmlParser, override_target: ?*Node) *Node {
+        const target: *Node = if (override_target) |override| override else self.open_elements.getLast();
         if (self.foster_parenting) {
             // 13.2.6.1 Creating and inserting nodes
         }
         return target;
     }
-    fn nextToken(self: *HtmlParser) void {
-        self.current_token = self.lexer.nextToken() catch return;
+
+    fn insertCharacter(self: *HtmlParser, data: []const u8) void {
+        const adjusted_insertion_location: *Node = self.getAppropriatePlace(null);
+        if (adjusted_insertion_location.data.* == .Document) return;
+
+        if (adjusted_insertion_location.children.getLastOrNull()) |last_child| {
+            if (last_child.data.* == .Text) {
+                last_child.data.Text.content.appendSlice(self.allocator, data);
+                return;
+            }
+        }
+        try adjusted_insertion_location.insert(self.allocator, try Node.createText(self.allocator, data));
+    }
+
+    fn insertHtmlElement(self: *HtmlParser, token: *Token) !void {
+        try self.insertForgienElement(token, "html", false);
+    }
+
+    fn insertForgienElement(self: *HtmlParser, token: *Token, namespace: []const u8, only_add_to_element_stack: bool) !void {
+        // namespace is not used now
+        _ = namespace[0];
+        const adjusted_insertion_location: *Node = self.getAppropriatePlace(null);
+        const element = try Node.createElement(self.allocator, token.Tag.tag_name.items);
+        if (!only_add_to_element_stack) {
+            try adjusted_insertion_location.insert(self.allocator, element);
+        }
+        try self.open_elements.append(self.allocator, element);
     }
 };
