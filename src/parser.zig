@@ -55,12 +55,12 @@ pub const HtmlParser = struct {
         sw: switch (insertion_mode) {
             .Initial => {
                 if (self.current_token.* == .Comment) {
-                    try self.document.children.append(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                    try self.document.insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
                     self.nextToken();
                     continue :sw .Initial;
                 }
                 if (self.current_token.* == .DOCTYPE) {
-                    try self.document.children.append(self.allocator, try Node.createDOCTYPE(self.allocator, self.current_token.DOCTYPE.name.items, null, null, false));
+                    try self.document.insert(self.allocator, try Node.createDOCTYPE(self.allocator, self.current_token.DOCTYPE.name.items, null, null, false));
                     self.nextToken();
                     continue :sw .BeforeHtml;
                 } else {
@@ -69,27 +69,27 @@ pub const HtmlParser = struct {
             },
             .BeforeHtml => {
                 if (self.current_token.* == .Comment) {
-                    try self.document.children.append(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                    try self.document.insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
                     self.nextToken();
                     continue :sw .BeforeHtml;
                 }
                 if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "html")) {
                     const html_tag_element = try Node.createElement(self.allocator, self.current_token.Tag.tag_name.items);
                     try self.open_elements.append(self.allocator, html_tag_element);
-                    try self.document.children.append(self.allocator, html_tag_element);
+                    try self.document.insert(self.allocator, html_tag_element);
                     self.nextToken();
                     continue :sw .BeforeHead;
                 } else {
                     const html_tag_element = try Node.createElement(self.allocator, "html");
                     try self.open_elements.append(self.allocator, html_tag_element);
-                    try self.document.children.append(self.allocator, html_tag_element);
+                    try self.document.insert(self.allocator, html_tag_element);
                     continue :sw .BeforeHead;
                 }
             },
             .BeforeHead => {
                 if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "head")) {
                     const head_tag_element = try Node.createElement(self.allocator, self.current_token.Tag.tag_name.items);
-                    try self.getAppropriatePlace().children.append(self.allocator, head_tag_element);
+                    try self.getAppropriatePlace(null).insert(self.allocator, head_tag_element);
                     try self.open_elements.append(self.allocator, head_tag_element);
                     self.nextToken();
                     continue :sw .InHead;

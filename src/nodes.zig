@@ -120,6 +120,12 @@ pub const Node = struct {
         }
         allocator.destroy(self);
     }
+
+    pub fn insert(self: *Node, allocator: std.mem.Allocator, child: *Node) !void {
+        try self.children.append(allocator, child);
+        child.parent = self;
+    }
+
     pub fn printTreeSimple(node: *Node) void {
         printTreeSimpleRecursive(node, 0);
     }
