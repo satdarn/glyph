@@ -23,7 +23,7 @@ pub const Token = union(enum) {
         data: std.ArrayList(u8),
     },
     Character: struct {
-        data: []const u8,
+        data: std.ArrayList(u8),
     },
     ReplacementCharacter: void, // REPLACEMENT CHARACTER character token U+FFFD
     EndOfFile: void,
@@ -53,7 +53,7 @@ pub const Token = union(enum) {
             },
             .Character => |tok| {
                 std.debug.print("Character TKN\n", .{});
-                std.debug.print("   data: {s}\n", .{tok.data});
+                std.debug.print("   data: {s}\n", .{tok.data.items});
             },
             .ReplacementCharacter => std.debug.print("EOF TKN\n", .{}),
             .EndOfFile => std.debug.print("EOF TKN\n", .{}),
@@ -90,6 +90,10 @@ pub const TokenHandler = struct {
             if (tok.* == .Comment) {
                 tok.Comment.data.deinit(self.allocator);
             }
+            if (tok.* == .Character) {
+                tok.Character.data.deinit(self.allocator);
+            }
+
             self.allocator.destroy(tok);
         }
         self.token_ref_list.deinit(self.allocator);
@@ -140,8 +144,9 @@ pub const TokenHandler = struct {
     }
     pub fn createCharacter(self: *TokenHandler, data: u8) !*Token {
         const tok: *Token = try self.allocator.create(Token);
-        tok.* = .{ .Character = .{ .data = &[1]u8{data} } };
+        tok.* = .{ .Character = .{ .data = try std.ArrayList(u8).initCapacity(self.allocator, 32) } };
         try self.token_ref_list.append(self.allocator, tok);
+        if (data != 0) try tok.Character.data.append(self.allocator, data);
         return tok;
     }
     pub fn createReplacement(self: *TokenHandler) !*Token {
@@ -158,6 +163,22 @@ pub const TokenHandler = struct {
     }
 
     pub fn enqueue(self: *TokenHandler, new: *Token) !void {
+        if (new.* == .Character) {
+            if (self.token_queue.getLastOrNull()) |last| {
+                if (last.* == .Character) {
+                    try last.Character.data.appendSlice(self.allocator, new.Character.data.items);
+                    for (self.token_ref_list.items, 0..) |tkn, i| {
+                        if (tkn == new) {
+                            std.debug.print("Coellese characters and freeing token from ref_list", .{});
+                            new.Character.data.deinit(self.allocator);
+                            self.allocator.destroy(new);
+                            _ = self.token_ref_list.swapRemove(i);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
         try self.token_queue.append(self.allocator, new);
     }
     pub fn dequeue(self: *TokenHandler) !*Token {
