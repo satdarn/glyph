@@ -87,11 +87,21 @@ pub const HtmlParser = struct {
                 }
             },
             .BeforeHead => {
+                if (self.current_token.* == .Comment) {
+                    try self.getAppropriatePlace(null).insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                    self.nextToken();
+                    continue :sw .BeforeHead;
+                }
                 if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "head")) {
                     const head_tag_element = try Node.createElement(self.allocator, self.current_token.Tag.tag_name.items);
                     try self.getAppropriatePlace(null).insert(self.allocator, head_tag_element);
                     try self.open_elements.append(self.allocator, head_tag_element);
                     self.nextToken();
+                    continue :sw .InHead;
+                } else {
+                    const head_tag_element = try Node.createElement(self.allocator, "head");
+                    try self.getAppropriatePlace(null).insert(self.allocator, head_tag_element);
+                    try self.open_elements.append(self.allocator, head_tag_element);
                     continue :sw .InHead;
                 }
             },
