@@ -106,7 +106,14 @@ pub const HtmlParser = struct {
                 }
             },
             .InHead => {
-                    
+                if (self.current_token.* == .Comment) {
+                    try self.getAppropriatePlace(null).insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                    self.nextToken();
+                    continue :sw .InHead;
+                }
+                if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "meta")) {
+                    try self.insertHtmlElement(self.current_token);
+                }
             },
             .InHeadNoscript => {},
             .AfterHead => {},
