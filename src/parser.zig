@@ -150,23 +150,21 @@ pub const HtmlParser = struct {
         return self.document;
     }
 
-    fn insertCharacter(self: *HtmlParser, data: []const u8) void {
+    fn insertCharacter(self: *HtmlParser, data: []const u8) !void {
         const adjusted_insertion_location: *Node = self.getAppropriatePlace(null);
-        if (adjusted_insertion_location.data.* == .Document) return;
+        if (adjusted_insertion_location.data == .Document) return;
 
         if (adjusted_insertion_location.children.getLastOrNull()) |last_child| {
-            if (last_child.data.* == .Text) {
-                last_child.data.Text.content.appendSlice(self.allocator, data);
+            if (last_child.data == .Text) {
+                try last_child.data.Text.content.appendSlice(self.allocator, data);
                 return;
             }
         }
         try adjusted_insertion_location.insert(self.allocator, try Node.createText(self.allocator, data));
     }
-
     fn insertHtmlElement(self: *HtmlParser, token: *Token) !void {
         try self.insertForgienElement(token, "html", false);
     }
-
     fn insertForgienElement(self: *HtmlParser, token: *Token, namespace: []const u8, only_add_to_element_stack: bool) !void {
         // namespace is not used now
         _ = namespace[0];
@@ -176,5 +174,10 @@ pub const HtmlParser = struct {
             try adjusted_insertion_location.insert(self.allocator, element);
         }
         try self.open_elements.append(self.allocator, element);
+    }
+    fn insertComment(self: *HtmlParser, token: *Token, override_target: ?*Node) !void {
+        const adjusted_insertion_location: *Node = self.getAppropriatePlace(override_target);
+        const comment: *Node = try Node.createComment(self.allocator, token.Comment.data.items);
+        try adjusted_insertion_location.insert(self.allocator, comment);
     }
 };
