@@ -140,11 +140,14 @@ pub const HtmlParser = struct {
     }
     
     fn getAppropriatePlace(self: *HtmlParser, override_target: ?*Node) *Node {
-        const target: *Node = if (override_target) |override| override else self.open_elements.getLast();
+        const target: ?*Node = if (override_target) |override| override else self.open_elements.getLastOrNull();
         if (self.foster_parenting) {
             // 13.2.6.1 Creating and inserting nodes
         }
-        return target;
+        if (target) |targ| {
+            return targ;
+        }
+        return self.document;
     }
 
     fn insertCharacter(self: *HtmlParser, data: []const u8) void {
