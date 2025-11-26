@@ -180,4 +180,14 @@ pub const HtmlParser = struct {
         const comment: *Node = try Node.createComment(self.allocator, token.Comment.data.items);
         try adjusted_insertion_location.insert(self.allocator, comment);
     }
+    fn genericRawTextElementParsing(self: *HtmlParser, token: *Token, insertion_mode: InsertionMode) !void {
+        try self.insertHtmlElement(token);
+        self.lexer.current_state = .RAWTEXT;
+        self.original_insertion_mode = insertion_mode;
+    }
+    fn genericRCDATAElementParsing(self: *HtmlParser, token: *Token, insertion_mode: InsertionMode) !void {
+        try self.insertHtmlElement(token);
+        self.lexer.current_state = .RCDATA;
+        self.original_insertion_mode = insertion_mode;
+    }
 };
