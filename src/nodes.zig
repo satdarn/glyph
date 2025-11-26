@@ -50,11 +50,13 @@ pub const Node = struct {
     }
     pub fn createText(allocator: std.mem.Allocator, text: []const u8) !*Node {
         const node = try allocator.create(Node);
+        var content = try std.ArrayList(u8).initCapacity(allocator, 10);
+        try content.appendSlice(allocator, text);
         node.* = .{
             .parent = null,
             .children = try std.ArrayList(*Node).initCapacity(allocator, 5),
             .allocator = allocator,
-            .data = .{ .Text = .{ .content = try std.ArrayList(u8).initCapacity(allocator, 10).appendSlice(allocator, text) } },
+            .data = .{ .Text = .{ .content = content } },
         };
         return node;
     }
