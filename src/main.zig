@@ -8,7 +8,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-    var parser = try HtmlParser.init(allocator);
+    var parser = try HtmlParser.init(allocator, "test.html");
     defer parser.deinit();
     try parser.getTree();
 }

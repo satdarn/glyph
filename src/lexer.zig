@@ -97,12 +97,22 @@ pub const HtmlLexer = struct {
     token_handler: TokenHandler,
     tempBuffer: std.ArrayList(u8),
     verbose: bool = false,
-    pub fn init(allocator: std.mem.Allocator, input_stream: InputStream) !HtmlLexer {
+    pub fn init(allocator: std.mem.Allocator, path_to_html_file: []const u8 ) !HtmlLexer {
         const token_handler = try TokenHandler.init(allocator);
         const tempBuffer: std.ArrayList(u8) = try std.ArrayList(u8).initCapacity(allocator, 10);
-        return .{ .stream = input_stream, .allocator = allocator, .current_token = undefined, .current_input_character = undefined, .token_handler = token_handler, .tempBuffer = tempBuffer };
+        const stream: InputStream = try InputStream.initFromFile(allocator, path_to_html_file); 
+        return .{ 
+            .stream = stream, 
+            .allocator = allocator, 
+            .current_token = undefined, 
+            .current_input_character = undefined, 
+            .token_handler = token_handler, 
+            .tempBuffer = tempBuffer 
+        };
+
     }
     pub fn deinit(self: *HtmlLexer) void {
+        self.stream.deinit();
         self.token_handler.deinit();
         self.tempBuffer.deinit(self.allocator);
     }

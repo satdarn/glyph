@@ -35,10 +35,10 @@ pub const HtmlParser = struct {
     document: *Node,
     open_elements: std.ArrayList(*Node),
     foster_parenting: bool,
-    pub fn init(allocator: std.mem.Allocator) !HtmlParser {
-        const stream = InputStream.init("<!DOCTYPE HtmL> \n <html> <head><meta/></head><body></body></html> \n");
-        var lexer = try HtmlLexer.init(allocator, stream);
-        const token: *Token = try lexer.nextToken();
+    original_insertion_mode: InsertionMode = .Initial,
+    pub fn init(allocator: std.mem.Allocator, path_to_html_file: []const u8) !HtmlParser {
+        const lexer = try HtmlLexer.init(allocator, path_to_html_file);
+        const token: *Token = undefined;
         const document: *Node = try Node.createDocument(allocator);
         const open_elements: std.ArrayList(*Node) = try std.ArrayList(*Node).initCapacity(allocator, 15);
         return .{ .lexer = lexer, .allocator = allocator, .current_token = token, .document = document, .open_elements = open_elements, .foster_parenting = false };
