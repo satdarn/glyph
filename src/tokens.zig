@@ -65,6 +65,8 @@ pub const TokenHandler = struct {
     allocator: std.mem.Allocator,
     token_ref_list: std.ArrayList(*Token),
     token_queue: std.ArrayList(*Token),
+    last_start_tag: ?*Token,
+
     pub fn init(allocator: std.mem.Allocator) !TokenHandler {
         // #TODO: optimize the size of the "Token List" that best represents the how we should keep on hand,
         // maybe move emit to this struct and we can dealloc from emit ???
@@ -74,6 +76,7 @@ pub const TokenHandler = struct {
             .allocator = allocator,
             .token_ref_list = token_ref_list,
             .token_queue = token_queue,
+            .last_start_tag = null,
         };
     }
     pub fn deinit(self: *TokenHandler) void {
@@ -169,7 +172,6 @@ pub const TokenHandler = struct {
                     try last.Character.data.appendSlice(self.allocator, new.Character.data.items);
                     for (self.token_ref_list.items, 0..) |tkn, i| {
                         if (tkn == new) {
-                            std.debug.print("Coellese characters and freeing token from ref_list", .{});
                             new.Character.data.deinit(self.allocator);
                             self.allocator.destroy(new);
                             _ = self.token_ref_list.swapRemove(i);
@@ -179,6 +181,10 @@ pub const TokenHandler = struct {
                 }
             }
         }
+        if (new.* == .Tag and new.Tag.type == .StartTag) {
+            self.last_start_tag = new;
+        }
+ 
         try self.token_queue.append(self.allocator, new);
     }
     pub fn dequeue(self: *TokenHandler) !*Token {
@@ -190,6 +196,14 @@ pub const TokenHandler = struct {
     }
     pub fn getQueueLen(self: *TokenHandler) usize {
         return self.token_queue.items.len;
+    }
+    pub fn isAppropriateEndTagToken(self: *TokenHandler, token: *Token) bool {
+        if (self.last_start_tag) |last| {
+            if (token.* == .Tag and token.Tag.type == .EndTag and std.mem.eql(u8, token.Tag.tag_name.items, last.Tag.tag_name.items)) {
+                return true;
+            }
+        }
+        return false;
     }
 };
 
