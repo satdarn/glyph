@@ -138,7 +138,7 @@ pub const HtmlParser = struct {
     fn nextToken(self: *HtmlParser) void {
         self.current_token = self.lexer.nextToken() catch return;
     }
-    
+
     fn getAppropriatePlace(self: *HtmlParser, override_target: ?*Node) *Node {
         const target: ?*Node = if (override_target) |override| override else self.open_elements.getLastOrNull();
         if (self.foster_parenting) {
@@ -149,7 +149,6 @@ pub const HtmlParser = struct {
         }
         return self.document;
     }
-
     fn insertCharacter(self: *HtmlParser, data: []const u8) !void {
         const adjusted_insertion_location: *Node = self.getAppropriatePlace(null);
         if (adjusted_insertion_location.data == .Document) return;
@@ -189,5 +188,25 @@ pub const HtmlParser = struct {
         try self.insertHtmlElement(token);
         self.lexer.current_state = .RCDATA;
         self.original_insertion_mode = insertion_mode;
+    }
+    fn isCurrentTokenStartTag(self: *HtmlParser) bool {
+        return (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag);
+    }
+    fn isCurrentTokenEndTag(self: *HtmlParser) bool {
+        return (self.current_token.* == .Tag and self.current_token.Tag.type == .EndTag);
+    }
+    fn isCurrentTokenComment(self: *HtmlParser) bool {
+        return (self.current_token.* == .Comment);
+    }
+    fn currentTokenNameIs(self: *HtmlParser, name: []const u8) bool {
+        return (std.mem.eql(u8, name, self.current_token.Tag.tag_name.items));
+    }
+    fn currentTokenNameIsOneOf(self: *HtmlParser, names: []const []const u8) bool {
+        for (names) |name| {
+            if (self.currentTokenNameIs(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 };
