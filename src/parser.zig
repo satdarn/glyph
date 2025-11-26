@@ -51,11 +51,11 @@ pub const HtmlParser = struct {
     pub fn getTree(self: *HtmlParser) !void {
         self.lexer.verbose = true;
         const insertion_mode: InsertionMode = .Initial;
-        // var head_element_pointer: ?*Node = null;
+        self.nextToken();
         sw: switch (insertion_mode) {
             .Initial => {
                 if (self.current_token.* == .Comment) {
-                    try self.document.insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                    try self.insertComment(self.current_token, self.document);
                     self.nextToken();
                     continue :sw .Initial;
                 }
@@ -68,17 +68,34 @@ pub const HtmlParser = struct {
                 }
             },
             .BeforeHtml => {
-                if (self.current_token.* == .Comment) {
-                    try self.document.insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                if (self.current_token.* == .DOCTYPE) {
+                    // Parse error
                     self.nextToken();
                     continue :sw .BeforeHtml;
                 }
-                if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "html")) {
-                    const html_tag_element = try Node.createElement(self.allocator, self.current_token.Tag.tag_name.items);
-                    try self.open_elements.append(self.allocator, html_tag_element);
-                    try self.document.insert(self.allocator, html_tag_element);
+                if (self.isCurrentTokenComment()) {
+                    try self.insertComment(self.current_token, self.document);
                     self.nextToken();
-                    continue :sw .BeforeHead;
+                    continue :sw .BeforeHtml;
+                }
+                if (self.isCurrentTokenStartTag()) {
+                    if (self.currentTokenNameIs("html")) {
+                        try self.insertForgienElement(self.current_token, "html", false);
+                        self.nextToken();
+                        continue :sw .BeforeHead;
+                    }
+                }
+                if (self.isCurrentTokenEndTag()) {
+                    if (self.currentTokenNameIsOneOf(&[_][]const u8{ "head", "body", "html", "br" })) {
+                        const html_tag_element = try Node.createElement(self.allocator, "html");
+                        try self.open_elements.append(self.allocator, html_tag_element);
+                        try self.document.insert(self.allocator, html_tag_element);
+                        continue :sw .BeforeHead;
+                    } else {
+                        // Parse error
+                        self.nextToken();
+                        continue :sw .BeforeHtml;
+                    }
                 } else {
                     const html_tag_element = try Node.createElement(self.allocator, "html");
                     try self.open_elements.append(self.allocator, html_tag_element);
@@ -87,17 +104,37 @@ pub const HtmlParser = struct {
                 }
             },
             .BeforeHead => {
-                if (self.current_token.* == .Comment) {
-                    try self.getAppropriatePlace(null).insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                if (self.isCurrentTokenComment()) {
+                    try self.insertComment(self.current_token, null);
                     self.nextToken();
                     continue :sw .BeforeHead;
                 }
-                if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "head")) {
-                    const head_tag_element = try Node.createElement(self.allocator, self.current_token.Tag.tag_name.items);
-                    try self.getAppropriatePlace(null).insert(self.allocator, head_tag_element);
-                    try self.open_elements.append(self.allocator, head_tag_element);
+                if (self.current_token.* == .DOCTYPE) {
                     self.nextToken();
-                    continue :sw .InHead;
+                    continue :sw .BeforeHead;
+                }
+                if (self.isCurrentTokenStartTag()) {
+                    if (self.currentTokenNameIs("html")) {
+                        // TODO: Process the token using the rules for the "in body" insertion mode.
+                        // for now just drop the tag
+                        self.nextToken();
+                        continue :sw .BeforeHead;
+                    }
+                    if (self.currentTokenNameIs("head")) {
+                        try self.insertHtmlElement(self.current_token);
+                        continue :sw .InHead;
+                    }
+                }
+                if (self.isCurrentTokenEndTag()) {
+                    if (self.currentTokenNameIsOneOf(&[_][]const u8{ "head", "body", "html", "br" })) {
+                        const head_tag_element = try Node.createElement(self.allocator, "head");
+                        try self.open_elements.append(self.allocator, head_tag_element);
+                        try self.document.insert(self.allocator, head_tag_element);
+                        continue :sw .InHead;
+                    } else {
+                        self.nextToken();
+                        continue :sw .BeforeHead;
+                    }
                 } else {
                     const head_tag_element = try Node.createElement(self.allocator, "head");
                     try self.getAppropriatePlace(null).insert(self.allocator, head_tag_element);
@@ -106,19 +143,127 @@ pub const HtmlParser = struct {
                 }
             },
             .InHead => {
-                if (self.current_token.* == .Comment) {
-                    try self.getAppropriatePlace(null).insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                if (self.isCurrentTokenComment()) {
+                    try self.insertComment(self.current_token, null);
                     self.nextToken();
                     continue :sw .InHead;
                 }
-                if (self.current_token.* == .Tag and self.current_token.Tag.type == .StartTag and std.mem.eql(u8, self.current_token.Tag.tag_name.items, "meta")) {
-                    try self.insertHtmlElement(self.current_token);
+                if (self.current_token.* == .DOCTYPE) {
+                    // Parse Error
+                    self.nextToken();
+                    continue :sw .InHead;
+                }
+                if (self.isCurrentTokenStartTag()) {
+                    if (self.currentTokenNameIs("html")) {
+                        // Process the token using the rules for the "in body" insertion mode.
+                    }
+                    if (self.currentTokenNameIsOneOf(&[_][]const u8{ "base", "basefont", "link", "meta" })) {
+                        try self.insertHtmlElement(self.current_token);
+                        _ = self.open_elements.pop();
+                    }
+                    if (self.currentTokenNameIs("title")) {
+                        // Follow the generic RCDATA element parsing algorithm.
+                        try self.genericRCDATAElementParsing(self.current_token, .InHead);
+                        self.nextToken();
+                        continue :sw .Text;
+                    }
+                    self.nextToken();
+                    continue :sw .InHead;
+                }
+                if (self.isCurrentTokenEndTag()) {
+                    if (self.currentTokenNameIs("head")) {
+                        _ = self.open_elements.pop();
+                        self.nextToken();
+                        continue :sw .AfterHead;
+                    }
                 }
             },
             .InHeadNoscript => {},
-            .AfterHead => {},
-            .InBody => {},
-            .Text => {},
+            .AfterHead => {
+                if (self.current_token.* == .Comment) {
+                    try self.getAppropriatePlace(null).insert(self.allocator, try Node.createComment(self.allocator, self.current_token.Comment.data.items));
+                    self.nextToken();
+                    continue :sw .AfterHead;
+                }
+                if (self.current_token.* == .DOCTYPE) {
+                    // Parse error
+                    self.nextToken();
+                    continue :sw .AfterHead;
+                }
+                if (self.isCurrentTokenStartTag()) {
+                    if (self.currentTokenNameIs("html")) {
+                        // Process the token using the rules for the "in body" insertion mode.
+                    }
+                    if (self.currentTokenNameIs("body")) {
+                        try self.insertHtmlElement(self.current_token);
+                        // set the frameset-ok flag to "not ok".
+                        self.nextToken();
+                        continue :sw .InBody;
+                    }
+                    if (self.currentTokenNameIs("frameset")) {
+                        try self.insertHtmlElement(self.current_token);
+                        self.nextToken();
+                        continue :sw .InFrameset;
+                    }
+                }
+            },
+            .InBody => {
+                if (self.isCurrentTokenComment()) {
+                    try self.insertComment(self.current_token, null);
+                    self.nextToken();
+                    continue :sw .InBody;
+                }
+                if (self.current_token.* == .DOCTYPE) {
+                    // Parse Error
+                    self.nextToken();
+                    continue :sw .InBody;
+                }
+                if (self.isCurrentTokenStartTag()) {
+                    if (self.currentTokenNameIs("html")) {
+                        // Parse Error
+                        // TODO: If there is a template element on the stack of open elements, then ignore the token.
+                        // Otherwise, for each attribute on the token, check to see if the attribute is already present on the top element of the stack of open elements. If it is not, add the attribute and its corresponding value to that element.
+                        // for now drop the token
+                        self.nextToken();
+                        continue :sw .InBody;
+                    }
+                    if (self.currentTokenNameIsOneOf(&[_][]const u8{ "base", "basefont", "bgsound", "link", "meta", "noframes", "script", "style", "template", "title" })) {
+                        // TODO: Process the token using the rules for the "in head" insertion mode.
+                    }
+                    if (self.currentTokenNameIs("body") or self.currentTokenNameIs("frameset")) {
+                        // Parse Error
+                        self.nextToken();
+                        continue :sw .InBody;
+                    }
+                    if (self.currentTokenNameIsOneOf(&[_][]const u8{ "h1", "h2", "h3", "h4", "h5", "h6" })) {
+                        // If the stack of open elements has a p element in button scope, then close a p element.
+                        // If the current node is an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6", then this is a parse error;
+                        // pop the current node off the stack of open elements.
+                        // Insert an HTML element for the token.
+                        try self.insertHtmlElement(self.current_token);
+                        self.nextToken();
+                        continue :sw .InBody;
+                    }
+                }
+                if (self.isCurrentTokenEndTag()) {
+                    if (self.currentTokenNameIs("body")) {
+                        self.nextToken();
+                        continue :sw .AfterBody;
+                    }
+                }
+            },
+            .Text => {
+                if (self.current_token.* == .Character) {
+                    try self.insertCharacter(self.current_token.Character.data.items);
+                    self.nextToken();
+                    continue :sw .Text;
+                }
+                if (self.isCurrentTokenEndTag()) {
+                    _ = self.open_elements.pop();
+                    self.nextToken();
+                    continue :sw self.original_insertion_mode;
+                }
+            },
             .InTable => {},
             .InTableText => {},
             .InCaption => {},
@@ -127,10 +272,21 @@ pub const HtmlParser = struct {
             .InRow => {},
             .InCell => {},
             .InTemplate => {},
-            .AfterBody => {},
+            .AfterBody => {
+                if (self.isCurrentTokenEndTag()) {
+                    if (self.currentTokenNameIs("html")) {
+                        self.nextToken();
+                        continue :sw .AfterAfterBody;
+                    }
+                }
+            },
             .InFrameset => {},
             .AfterFrameset => {},
-            .AfterAfterBody => {},
+            .AfterAfterBody => {
+                if (self.current_token.* == .EndOfFile) {
+                    break :sw;
+                }
+            },
             .AfterAfterFrameset => {},
         }
         self.document.printTreeSimple();
