@@ -445,30 +445,45 @@ pub const HtmlLexer = struct {
                 self.current_input_character = self.stream.consumeChar();
                 if (self.current_input_character) |char| {
                     // U+0009 CHARACTER TABULATION (tab) U+000A LINE FEED (LF) U+000C FORM FEED (FF) U+0020 SPACE
-                    if (std.ascii.isWhitespace(char)) {
+                    if (std.ascii.isWhitespace(char) and self.token_handler.isAppropriateEndTagToken(self.current_token)) {
                         // If the current end tag token is an appropriate end tag token, then switch to the before attribute name state.
                         // Otherwise, treat it as per the "anything else" entry below.
+                        self.current_state = .BeforeAttributeName;
+                        return;
                     }
                     // U+002F SOLIDUS (/)
-                    if (char == '/') {
+                    if (char == '/' and self.token_handler.isAppropriateEndTagToken(self.current_token)) {
                         // If the current end tag token is an appropriate end tag token, then switch to the self-closing start tag state.
                         // Otherwise, treat it as per the "anything else" entry below.
+                        self.current_state = .SelfClosingStartTag;
+                        return;
                     }
                     // U+003E GREATER-THAN SIGN (>)
-                    if (char == '>') {
+                    if (char == '>' and self.token_handler.isAppropriateEndTagToken(self.current_token) ) {
                         // If the current end tag token is an appropriate end tag token, then switch to the data state and emit the current tag token.
                         // Otherwise, treat it as per the "anything else" entry below.
+                        try self.token_handler.enqueue(self.current_token);
+                        self.current_state = .Data;
+                        return;
                     }
                     if (std.ascii.isAlphabetic(char)) {
                         // ASCII upper alpha
                         if (std.ascii.isUpper(char)) {
                             // Append the lowercase version of the current input character (add 0x0020 to the character's code point)
                             // to the current tag token's tag name. Append the current input character to the temporary buffer.
+                            try self.current_token.Tag.tag_name.append(self.token_handler.allocator, std.ascii.toLower(char));
+                            try self.tempBuffer.append(self.allocator, std.ascii.toLower(char));
+                            self.current_state = .RCADATAEndTagName;
+                            return;
                         }
                         // ASCII lower alpha
                         else if (std.ascii.isLower(char)) {
                             // Append the current input character to the current tag token's tag name.
                             // Append the current input character to the temporary buffer.
+                            try self.current_token.Tag.tag_name.append(self.token_handler.allocator, char);
+                            try self.tempBuffer.append(self.allocator, char);
+                            self.current_state = .RCADATAEndTagName;
+                            return;
                         }
                     }
                     // Anything else
@@ -476,7 +491,14 @@ pub const HtmlLexer = struct {
                         // Emit a U+003C LESS-THAN SIGN character token, a U+002F SOLIDUS character token,
                         // and a character token for each of the characters in the temporary buffer (in the order they were added to the buffer).
                         // Reconsume in the RCDATA state.
-
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
+                        for (self.tempBuffer.items) |temp_char| {
+                            try self.token_handler.enqueue(try self.token_handler.createCharacter(temp_char));
+                        }
+                        self.stream.reconsumeChar();
+                        self.current_state = .RCDATA;
+                        return;
                     }
                 }
                 // EOF is Anything else
@@ -484,6 +506,14 @@ pub const HtmlLexer = struct {
                     // Emit a U+003C LESS-THAN SIGN character token, a U+002F SOLIDUS character token,
                     // and a character token for each of the characters in the temporary buffer (in the order they were added to the buffer).
                     // Reconsume in the RCDATA state.
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('<'));
+                    try self.token_handler.enqueue(try self.token_handler.createCharacter('/'));
+                    for (self.tempBuffer.items) |temp_char| {
+                        try self.token_handler.enqueue(try self.token_handler.createCharacter(temp_char));
+                    }
+                    self.stream.reconsumeChar();
+                    self.current_state = .RCDATA;
+                    return;
                 }
             },
             .RAWTEXTLessThanSign => {
